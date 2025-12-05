@@ -18,9 +18,9 @@ type RateLimiter struct {
 }
 
 type clientLimit struct {
-	count      int
 	resetTime  time.Time
 	lastUpdate time.Time
+	count      int
 }
 
 // NewRateLimiter creates a new rate limiter with the specified limits.

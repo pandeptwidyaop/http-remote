@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/pandeptwidyaop/http-remote/internal/upgrade"
 	"github.com/pandeptwidyaop/http-remote/internal/version"
 )

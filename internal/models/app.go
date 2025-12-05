@@ -5,13 +5,13 @@ import "time"
 
 // App represents an application with its configuration.
 type App struct {
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	WorkingDir  string    `json:"working_dir"`
 	Token       string    `json:"token,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // CreateAppRequest contains the data for creating a new application.

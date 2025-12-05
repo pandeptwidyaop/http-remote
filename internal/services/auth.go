@@ -9,10 +9,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/pandeptwidyaop/http-remote/internal/config"
 	"github.com/pandeptwidyaop/http-remote/internal/database"
 	"github.com/pandeptwidyaop/http-remote/internal/models"
-	"golang.org/x/crypto/bcrypt"
 )
 
 var (

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/pandeptwidyaop/http-remote/internal/assets"
 	"github.com/pandeptwidyaop/http-remote/internal/config"
 	"github.com/pandeptwidyaop/http-remote/internal/handlers"
@@ -16,6 +17,7 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/version"
 )
 
+// New creates and configures a new Gin router with all routes and middleware.
 func New(cfg *config.Config, authService *services.AuthService, appService *services.AppService, executorService *services.ExecutorService, auditService *services.AuditService) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 

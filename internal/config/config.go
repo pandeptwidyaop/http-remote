@@ -10,18 +10,18 @@ import (
 
 // Config represents the main application configuration structure.
 type Config struct {
-	Server    ServerConfig    `yaml:"server"`
+	Admin     AdminConfig     `yaml:"admin"`
 	Database  DatabaseConfig  `yaml:"database"`
+	Server    ServerConfig    `yaml:"server"`
 	Auth      AuthConfig      `yaml:"auth"`
 	Execution ExecutionConfig `yaml:"execution"`
-	Admin     AdminConfig     `yaml:"admin"`
 }
 
 // ServerConfig holds HTTP server configuration.
 type ServerConfig struct {
 	Host         string `yaml:"host"`
-	Port         int    `yaml:"port"`
 	PathPrefix   string `yaml:"path_prefix"`
+	Port         int    `yaml:"port"`
 	SecureCookie bool   `yaml:"secure_cookie"`
 }
 

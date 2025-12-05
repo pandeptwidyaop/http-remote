@@ -20,6 +20,7 @@ const (
 	downloadBase = "https://github.com/" + githubRepo + "/releases/download"
 )
 
+// GitHubRelease represents a GitHub release with its metadata.
 type GitHubRelease struct {
 	TagName string `json:"tag_name"`
 	Name    string `json:"name"`
