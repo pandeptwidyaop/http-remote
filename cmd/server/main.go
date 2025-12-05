@@ -10,10 +10,32 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/database"
 	"github.com/pandeptwidyaop/http-remote/internal/router"
 	"github.com/pandeptwidyaop/http-remote/internal/services"
+	"github.com/pandeptwidyaop/http-remote/internal/upgrade"
 	"github.com/pandeptwidyaop/http-remote/internal/version"
 )
 
 func main() {
+	// Check for subcommands first
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "upgrade":
+			force := false
+			if len(os.Args) > 2 && (os.Args[2] == "-f" || os.Args[2] == "--force") {
+				force = true
+			}
+			if err := upgrade.Run(force); err != nil {
+				fmt.Fprintf(os.Stderr, "Upgrade failed: %v\n", err)
+				os.Exit(1)
+			}
+			os.Exit(0)
+		case "version":
+			fmt.Printf("HTTP Remote %s\n", version.Version)
+			fmt.Printf("Build Time: %s\n", version.BuildTime)
+			fmt.Printf("Git Commit: %s\n", version.GitCommit)
+			os.Exit(0)
+		}
+	}
+
 	configPath := flag.String("config", "config.yaml", "path to config file")
 	showVersion := flag.Bool("version", false, "show version information")
 	flag.Parse()
