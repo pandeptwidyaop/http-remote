@@ -1,3 +1,18 @@
+# [1.3.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.2.0...v1.3.0) (2025-12-05)
+
+
+### Bug Fixes
+
+* add Audit Logs link to executions page navigation ([b68af05](https://github.com/pandeptwidyaop/http-remote/commit/b68af054a2cb7f56b6e6665076ece8a1d27ea194))
+* return empty array instead of null for empty audit logs ([a33a573](https://github.com/pandeptwidyaop/http-remote/commit/a33a57383f009fcffe0395bee0c42e7184792bf7))
+
+
+### Features
+
+* add audit log viewer in web UI ([a1e9657](https://github.com/pandeptwidyaop/http-remote/commit/a1e9657e4c21815b480f12d79c99196076a8a391))
+* comprehensive security improvements ([4c85132](https://github.com/pandeptwidyaop/http-remote/commit/4c8513278c132af079e9de45c43f85d1297ad527))
+* integrate audit logging into handlers ([e9876b0](https://github.com/pandeptwidyaop/http-remote/commit/e9876b09bfdd5dfb2d2f8a02c531407c70d907c3))
+
 # [1.2.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.1.0...v1.2.0) (2025-12-05)
 
 
