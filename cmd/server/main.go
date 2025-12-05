@@ -1,3 +1,4 @@
+// Package main is the entry point for the HTTP Remote server.
 package main
 
 import (

@@ -20,10 +20,10 @@ func (h *VersionHandler) CheckUpdate(c *gin.Context) {
 	release, err := upgrade.CheckLatestVersion()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
-			"current":        version.Version,
-			"latest":         "",
+			"current":          version.Version,
+			"latest":           "",
 			"update_available": false,
-			"error":          err.Error(),
+			"error":            err.Error(),
 		})
 		return
 	}

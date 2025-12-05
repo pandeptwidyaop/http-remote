@@ -8,11 +8,13 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
+// AuditHandler handles HTTP requests for audit log viewing.
 type AuditHandler struct {
 	auditService *services.AuditService
 	pathPrefix   string
 }
 
+// NewAuditHandler creates a new AuditHandler instance.
 func NewAuditHandler(auditService *services.AuditService, pathPrefix string) *AuditHandler {
 	return &AuditHandler{
 		auditService: auditService,

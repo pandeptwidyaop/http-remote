@@ -9,6 +9,7 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
+// AuthHandler handles HTTP requests for user authentication.
 type AuthHandler struct {
 	authService  *services.AuthService
 	auditService *services.AuditService
@@ -16,6 +17,7 @@ type AuthHandler struct {
 	secureCookie bool
 }
 
+// NewAuthHandler creates a new AuthHandler instance.
 func NewAuthHandler(authService *services.AuthService, auditService *services.AuditService, pathPrefix string, secureCookie bool) *AuthHandler {
 	return &AuthHandler{
 		authService:  authService,
@@ -25,11 +27,13 @@ func NewAuthHandler(authService *services.AuthService, auditService *services.Au
 	}
 }
 
+// LoginRequest contains user login credentials.
 type LoginRequest struct {
 	Username string `json:"username" form:"username" binding:"required"`
 	Password string `json:"password" form:"password" binding:"required"`
 }
 
+// LoginPage renders the login page.
 func (h *AuthHandler) LoginPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "login.html", gin.H{
 		"PathPrefix": h.pathPrefix,

@@ -30,11 +30,11 @@ func TestCreateMigrationsTable(t *testing.T) {
 		SELECT COUNT(*) FROM sqlite_master 
 		WHERE type='table' AND name='migrations'
 	`).Scan(&count)
-	
+
 	if err != nil {
 		t.Fatalf("failed to query migrations table: %v", err)
 	}
-	
+
 	if count != 1 {
 		t.Errorf("expected 1 migrations table, got %d", count)
 	}
@@ -60,15 +60,15 @@ func TestRecordMigration(t *testing.T) {
 	err = db.QueryRow(`
 		SELECT migration, batch FROM migrations WHERE migration = ?
 	`, "test_migration").Scan(&migrationName, &batch)
-	
+
 	if err != nil {
 		t.Fatalf("failed to query migration: %v", err)
 	}
-	
+
 	if migrationName != "test_migration" {
 		t.Errorf("expected migration name 'test_migration', got %q", migrationName)
 	}
-	
+
 	if batch != 1 {
 		t.Errorf("expected batch 1, got %d", batch)
 	}
@@ -119,18 +119,18 @@ func TestRunMigrations(t *testing.T) {
 
 	// Verify all expected tables exist
 	expectedTables := []string{"users", "sessions", "apps", "commands", "executions", "audit_logs", "migrations"}
-	
+
 	for _, table := range expectedTables {
 		var count int
 		err = db.QueryRow(`
 			SELECT COUNT(*) FROM sqlite_master 
 			WHERE type='table' AND name=?
 		`, table).Scan(&count)
-		
+
 		if err != nil {
 			t.Fatalf("failed to query table %s: %v", table, err)
 		}
-		
+
 		if count != 1 {
 			t.Errorf("expected table %s to exist", table)
 		}
@@ -209,11 +209,11 @@ func TestMigrateExecutionsTable(t *testing.T) {
 	err = db.QueryRow(`
 		SELECT status FROM executions WHERE id = 'exec-1'
 	`).Scan(&status)
-	
+
 	if err != nil {
 		t.Fatalf("failed to query migrated data: %v", err)
 	}
-	
+
 	if status != "success" {
 		t.Errorf("expected status 'success', got %q", status)
 	}

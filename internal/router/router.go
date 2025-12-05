@@ -55,9 +55,9 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	versionHandler := handlers.NewVersionHandler()
 
 	// Rate limiters
-	loginLimiter := middleware.NewRateLimiter(5, time.Minute)     // 5 req/min for login
-	apiLimiter := middleware.NewRateLimiter(60, time.Minute)      // 60 req/min for API
-	deployLimiter := middleware.NewRateLimiter(30, time.Minute)   // 30 req/min for deploy
+	loginLimiter := middleware.NewRateLimiter(5, time.Minute)   // 5 req/min for login
+	apiLimiter := middleware.NewRateLimiter(60, time.Minute)    // 60 req/min for API
+	deployLimiter := middleware.NewRateLimiter(30, time.Minute) // 30 req/min for deploy
 
 	prefix.GET("/login", authHandler.LoginPage)
 	prefix.POST("/login", loginLimiter.Middleware(), authHandler.Login)

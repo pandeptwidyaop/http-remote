@@ -1,3 +1,4 @@
+// Package handlers provides HTTP request handlers for the web UI and API.
 package handlers
 
 import (
@@ -8,11 +9,13 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
+// AppHandler handles HTTP requests for application management.
 type AppHandler struct {
 	appService *services.AppService
 	pathPrefix string
 }
 
+// NewAppHandler creates a new AppHandler instance.
 func NewAppHandler(appService *services.AppService, pathPrefix string) *AppHandler {
 	return &AppHandler{
 		appService: appService,
@@ -20,6 +23,7 @@ func NewAppHandler(appService *services.AppService, pathPrefix string) *AppHandl
 	}
 }
 
+// List returns all applications as JSON.
 func (h *AppHandler) List(c *gin.Context) {
 	apps, err := h.appService.GetAllApps()
 	if err != nil {
@@ -30,6 +34,7 @@ func (h *AppHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, apps)
 }
 
+// Get returns a single application by ID.
 func (h *AppHandler) Get(c *gin.Context) {
 	id := c.Param("id")
 
@@ -46,6 +51,7 @@ func (h *AppHandler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, app)
 }
 
+// Create creates a new application.
 func (h *AppHandler) Create(c *gin.Context) {
 	var req models.CreateAppRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -66,6 +72,7 @@ func (h *AppHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, app)
 }
 
+// Update updates an existing application.
 func (h *AppHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 
@@ -88,6 +95,7 @@ func (h *AppHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, app)
 }
 
+// Delete deletes an application.
 func (h *AppHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 
@@ -103,6 +111,7 @@ func (h *AppHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "app deleted"})
 }
 
+// RegenerateToken generates a new authentication token for an application.
 func (h *AppHandler) RegenerateToken(c *gin.Context) {
 	id := c.Param("id")
 
@@ -119,6 +128,7 @@ func (h *AppHandler) RegenerateToken(c *gin.Context) {
 	c.JSON(http.StatusOK, app)
 }
 
+// ListCommands returns all commands for an application.
 func (h *AppHandler) ListCommands(c *gin.Context) {
 	appID := c.Param("id")
 
@@ -131,6 +141,7 @@ func (h *AppHandler) ListCommands(c *gin.Context) {
 	c.JSON(http.StatusOK, commands)
 }
 
+// CreateCommand creates a new command for an application.
 func (h *AppHandler) CreateCommand(c *gin.Context) {
 	appID := c.Param("id")
 
