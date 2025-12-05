@@ -111,8 +111,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	// Get user from context for audit log
 	userVal, exists := c.Get(middleware.UserContextKey)
 	if exists {
-		user := userVal.(*models.User)
-		h.auditService.LogLogout(user, c.ClientIP(), c.GetHeader("User-Agent"))
+		if user, ok := userVal.(*models.User); ok {
+			h.auditService.LogLogout(user, c.ClientIP(), c.GetHeader("User-Agent"))
+		}
 	}
 
 	sessionID, err := c.Cookie(middleware.SessionCookieName)
@@ -130,6 +131,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	c.Redirect(http.StatusFound, h.pathPrefix+"/login")
 }
 
+// Me returns the current user's information.
 func (h *AuthHandler) Me(c *gin.Context) {
 	user, exists := c.Get(middleware.UserContextKey)
 	if !exists {
@@ -137,7 +139,12 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		return
 	}
 
-	u := user.(*models.User)
+	u, ok := user.(*models.User)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"id":       u.ID,
 		"username": u.Username,

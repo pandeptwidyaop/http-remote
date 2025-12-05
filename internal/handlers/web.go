@@ -30,7 +30,11 @@ func (h *WebHandler) Dashboard(c *gin.Context) {
 		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
 		return
 	}
-	u := user.(*models.User)
+	u, ok := user.(*models.User)
+	if !ok {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 
 	apps, _ := h.appService.GetAllApps()
 	executions, _ := h.executorService.GetExecutions(10, 0)
@@ -50,7 +54,11 @@ func (h *WebHandler) AppsPage(c *gin.Context) {
 		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
 		return
 	}
-	u := user.(*models.User)
+	u, ok := user.(*models.User)
+	if !ok {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 
 	apps, _ := h.appService.GetAllApps()
 
@@ -68,7 +76,11 @@ func (h *WebHandler) AppDetailPage(c *gin.Context) {
 		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
 		return
 	}
-	u := user.(*models.User)
+	u, ok := user.(*models.User)
+	if !ok {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 
 	id := c.Param("id")
 
@@ -95,7 +107,11 @@ func (h *WebHandler) ExecutePage(c *gin.Context) {
 		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
 		return
 	}
-	u := user.(*models.User)
+	u, ok := user.(*models.User)
+	if !ok {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 
 	id := c.Param("id")
 
@@ -122,7 +138,11 @@ func (h *WebHandler) ExecutionsPage(c *gin.Context) {
 		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
 		return
 	}
-	u := user.(*models.User)
+	u, ok := user.(*models.User)
+	if !ok {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 
 	executions, _ := h.executorService.GetExecutions(50, 0)
 

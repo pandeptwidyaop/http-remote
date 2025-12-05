@@ -115,7 +115,11 @@ func (h *CommandHandler) Execute(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	u := user.(*models.User)
+	u, ok := user.(*models.User)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+		return
+	}
 
 	execution, err := h.executorService.CreateExecution(cmd.ID, u.ID)
 	if err != nil {
