@@ -156,6 +156,22 @@ func runVersionedMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Migration: Add updated_at column to apps table
+	migrationName = "2025_12_06_000001_add_apps_updated_at"
+	hasRun, err = hasMigrationRun(db, migrationName)
+	if err != nil {
+		return err
+	}
+
+	if !hasRun {
+		if err := addAppsUpdatedAtColumn(db); err != nil {
+			return err
+		}
+		if err := recordMigration(db, migrationName, batch); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -235,6 +251,71 @@ func migrateExecutionsTable(db *sql.DB) error {
 	}
 
 	_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_executions_status ON executions(status)`)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// addAppsUpdatedAtColumn adds updated_at column to apps table for backward compatibility
+func addAppsUpdatedAtColumn(db *sql.DB) error {
+	// Check if column already exists
+	var count int
+	err := db.QueryRow(`
+		SELECT COUNT(*) FROM pragma_table_info('apps')
+		WHERE name = 'updated_at'
+	`).Scan(&count)
+
+	if err != nil {
+		return err
+	}
+
+	// Column already exists, skip migration
+	if count > 0 {
+		return nil
+	}
+
+	// Begin transaction
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Add the column with default NULL (SQLite limitation)
+	_, err = tx.Exec(`ALTER TABLE apps ADD COLUMN updated_at DATETIME`)
+	if err != nil {
+		return err
+	}
+
+	// Set default value for existing rows (copy from created_at)
+	_, err = tx.Exec(`UPDATE apps SET updated_at = created_at WHERE updated_at IS NULL`)
+	if err != nil {
+		return err
+	}
+
+	// Create trigger to auto-update updated_at on INSERT if not provided
+	_, err = tx.Exec(`
+		CREATE TRIGGER IF NOT EXISTS apps_updated_at_insert
+		AFTER INSERT ON apps
+		WHEN NEW.updated_at IS NULL
+		BEGIN
+			UPDATE apps SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+		END
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Create trigger to auto-update updated_at on UPDATE
+	_, err = tx.Exec(`
+		CREATE TRIGGER IF NOT EXISTS apps_updated_at_update
+		AFTER UPDATE ON apps
+		BEGIN
+			UPDATE apps SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+		END
+	`)
 	if err != nil {
 		return err
 	}
