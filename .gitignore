@@ -1,0 +1,21 @@
+# Binaries
+http-remote
+*.exe
+
+# Database
+data/
+*.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+tmp/
+*.log

@@ -1,0 +1,154 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Semantic Release (Dry Run)
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          dry_run: true
+          extra_plugins: |
+            @semantic-release/changelog
+            @semantic-release/git
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Show next version
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          echo "Next version: v${{ steps.semantic.outputs.new_release_version }}"
+
+  build:
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install cross-compiler
+        if: matrix.goos == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu gcc-x86-64-linux-gnu
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+          VERSION: v${{ needs.release.outputs.new_release_version }}
+        run: |
+          # Set CC based on target
+          if [ "$GOOS" = "linux" ] && [ "$GOARCH" = "amd64" ]; then
+            export CC=x86_64-linux-gnu-gcc
+          elif [ "$GOOS" = "linux" ] && [ "$GOARCH" = "arm64" ]; then
+            export CC=aarch64-linux-gnu-gcc
+          fi
+
+          # Build
+          go build -ldflags="-s -w \
+            -X github.com/pandeptwidyaop/http-remote/internal/version.Version=${VERSION} \
+            -X github.com/pandeptwidyaop/http-remote/internal/version.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') \
+            -X github.com/pandeptwidyaop/http-remote/internal/version.GitCommit=${GITHUB_SHA::8}" \
+            -o http-remote-${{ matrix.suffix }} ./cmd/server
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: http-remote-${{ matrix.suffix }}
+          path: http-remote-${{ matrix.suffix }}
+
+  publish:
+    needs: [release, build]
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          VERSION="v${{ needs.release.outputs.new_release_version }}"
+
+          # Move and rename binaries
+          for dir in dist/*/; do
+            binary=$(ls "$dir")
+            cp "$dir$binary" "release/$binary"
+            chmod +x "release/$binary"
+
+            # Create checksum
+            cd release
+            sha256sum "$binary" > "$binary.sha256"
+            cd ..
+          done
+
+          ls -la release/
+
+      - name: Semantic Release
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          extra_plugins: |
+            @semantic-release/changelog
+            @semantic-release/git
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: v${{ needs.release.outputs.new_release_version }}
+        run: |
+          # Upload binaries to release
+          for file in release/*; do
+            echo "Uploading $file..."
+            gh release upload "$VERSION" "$file" --clobber
+          done

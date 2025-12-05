@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apps - HTTP Remote</title>
+    <link rel="stylesheet" href="{{.PathPrefix}}/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="{{.PathPrefix}}/">HTTP Remote</a>
+            <span class="version-badge">{{.Version}}</span>
+        </div>
+        <div class="nav-links">
+            <a href="{{.PathPrefix}}/">Dashboard</a>
+            <a href="{{.PathPrefix}}/apps" class="active">Apps</a>
+            <a href="{{.PathPrefix}}/executions">History</a>
+        </div>
+        <div class="nav-user">
+            <span>{{.User.Username}}</span>
+            <form method="POST" action="{{.PathPrefix}}/logout" style="display:inline;">
+                <button type="submit" class="btn btn-sm">Logout</button>
+            </form>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="page-header">
+            <h1>Apps</h1>
+            <button class="btn btn-primary" onclick="showModal('createAppModal')">New App</button>
+        </div>
+
+        {{if .Apps}}
+        <div class="app-grid">
+            {{range .Apps}}
+            <div class="app-card">
+                <h3><a href="{{$.PathPrefix}}/apps/{{.ID}}">{{.Name}}</a></h3>
+                <p class="description">{{.Description}}</p>
+                <p class="working-dir"><code>{{.WorkingDir}}</code></p>
+                <div class="card-actions">
+                    <a href="{{$.PathPrefix}}/apps/{{.ID}}" class="btn btn-sm">View Commands</a>
+                    <button class="btn btn-sm btn-danger" onclick="deleteApp('{{.ID}}')">Delete</button>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{else}}
+        <p class="empty">No apps yet. Create your first app to get started.</p>
+        {{end}}
+    </main>
+
+    <div id="createAppModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New App</h2>
+                <button class="close" onclick="hideModal('createAppModal')">&times;</button>
+            </div>
+            <form id="createAppForm">
+                <div class="form-group">
+                    <label for="name">Name</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <input type="text" id="description" name="description">
+                </div>
+                <div class="form-group">
+                    <label for="working_dir">Working Directory</label>
+                    <input type="text" id="working_dir" name="working_dir" required placeholder="/path/to/app">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn" onclick="hideModal('createAppModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{.PathPrefix}}/static/js/app.js"></script>
+    <script>
+        const pathPrefix = '{{.PathPrefix}}';
+
+        document.getElementById('createAppForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const data = {
+                name: form.name.value,
+                description: form.description.value,
+                working_dir: form.working_dir.value
+            };
+
+            try {
+                const res = await fetch(pathPrefix + '/api/apps', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || 'Failed to create app');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        });
+
+        async function deleteApp(id) {
+            if (!confirm('Are you sure you want to delete this app?')) return;
+
+            try {
+                const res = await fetch(pathPrefix + '/api/apps/' + id, {
+                    method: 'DELETE'
+                });
+
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || 'Failed to delete app');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+    </script>
+</body>
+</html>

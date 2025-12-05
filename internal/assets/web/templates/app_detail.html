@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.App.Name}} - HTTP Remote</title>
+    <link rel="stylesheet" href="{{.PathPrefix}}/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="{{.PathPrefix}}/">HTTP Remote</a>
+            <span class="version-badge">{{.Version}}</span>
+        </div>
+        <div class="nav-links">
+            <a href="{{.PathPrefix}}/">Dashboard</a>
+            <a href="{{.PathPrefix}}/apps" class="active">Apps</a>
+            <a href="{{.PathPrefix}}/executions">History</a>
+        </div>
+        <div class="nav-user">
+            <span>{{.User.Username}}</span>
+            <form method="POST" action="{{.PathPrefix}}/logout" style="display:inline;">
+                <button type="submit" class="btn btn-sm">Logout</button>
+            </form>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="breadcrumb">
+            <a href="{{.PathPrefix}}/apps">Apps</a> / {{.App.Name}}
+        </div>
+
+        <div class="page-header">
+            <div>
+                <h1>{{.App.Name}}</h1>
+                <p class="description">{{.App.Description}}</p>
+                <p class="working-dir">Working Directory: <code>{{.App.WorkingDir}}</code></p>
+            </div>
+            <button class="btn btn-primary" onclick="showModal('createCommandModal')">New Command</button>
+        </div>
+
+        <div class="api-info card" style="margin-bottom: 1.5rem;">
+            <h3>API Deploy</h3>
+            <p class="description">Use this endpoint to trigger deployment via API:</p>
+            <pre class="command-preview">curl -X POST {{.PathPrefix}}/deploy/{{.App.ID}} \
+  -H "X-Deploy-Token: {{.App.Token}}"</pre>
+            <div style="margin-top: 0.5rem;">
+                <span class="label">Token:</span>
+                <code id="deployToken">{{.App.Token}}</code>
+                <button class="btn btn-sm" onclick="copyToken()">Copy</button>
+                <button class="btn btn-sm btn-danger" onclick="regenerateToken()">Regenerate</button>
+            </div>
+        </div>
+
+        <h2>Commands</h2>
+        {{if .Commands}}
+        <div class="command-list">
+            {{range .Commands}}
+            <div class="command-card">
+                <div class="command-info">
+                    <h3>{{.Name}}</h3>
+                    <p class="description">{{.Description}}</p>
+                    <pre class="command-preview">{{.Command}}</pre>
+                    <p class="meta">Timeout: {{.TimeoutSeconds}}s</p>
+                </div>
+                <div class="command-actions">
+                    <a href="{{$.PathPrefix}}/execute/{{.ID}}" class="btn btn-primary">Execute</a>
+                    <button class="btn btn-danger btn-sm" onclick="deleteCommand('{{.ID}}')">Delete</button>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{else}}
+        <p class="empty">No commands yet. Create your first command to get started.</p>
+        {{end}}
+    </main>
+
+    <div id="createCommandModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Command</h2>
+                <button class="close" onclick="hideModal('createCommandModal')">&times;</button>
+            </div>
+            <form id="createCommandForm">
+                <div class="form-group">
+                    <label for="cmd_name">Name</label>
+                    <input type="text" id="cmd_name" name="name" required placeholder="e.g., deploy">
+                </div>
+                <div class="form-group">
+                    <label for="cmd_description">Description</label>
+                    <input type="text" id="cmd_description" name="description" placeholder="What this command does">
+                </div>
+                <div class="form-group">
+                    <label for="cmd_command">Command</label>
+                    <textarea id="cmd_command" name="command" required rows="4" placeholder="git pull && docker-compose up -d"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="cmd_timeout">Timeout (seconds)</label>
+                    <input type="number" id="cmd_timeout" name="timeout_seconds" value="300" min="1" max="3600">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn" onclick="hideModal('createCommandModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{.PathPrefix}}/static/js/app.js"></script>
+    <script>
+        const pathPrefix = '{{.PathPrefix}}';
+        const appId = '{{.App.ID}}';
+
+        document.getElementById('createCommandForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const data = {
+                name: form.name.value,
+                description: form.description.value,
+                command: form.command.value,
+                timeout_seconds: parseInt(form.timeout_seconds.value) || 300
+            };
+
+            try {
+                const res = await fetch(pathPrefix + '/api/apps/' + appId + '/commands', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || 'Failed to create command');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        });
+
+        async function deleteCommand(id) {
+            if (!confirm('Are you sure you want to delete this command?')) return;
+
+            try {
+                const res = await fetch(pathPrefix + '/api/commands/' + id, {
+                    method: 'DELETE'
+                });
+
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || 'Failed to delete command');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        function copyToken() {
+            const token = document.getElementById('deployToken').textContent;
+            navigator.clipboard.writeText(token).then(() => {
+                alert('Token copied to clipboard');
+            });
+        }
+
+        async function regenerateToken() {
+            if (!confirm('Are you sure you want to regenerate the token? The old token will stop working.')) return;
+
+            try {
+                const res = await fetch(pathPrefix + '/api/apps/' + appId + '/regenerate-token', {
+                    method: 'POST'
+                });
+
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || 'Failed to regenerate token');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+    </script>
+</body>
+</html>

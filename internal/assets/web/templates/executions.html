@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Execution History - HTTP Remote</title>
+    <link rel="stylesheet" href="{{.PathPrefix}}/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="{{.PathPrefix}}/">HTTP Remote</a>
+            <span class="version-badge">{{.Version}}</span>
+        </div>
+        <div class="nav-links">
+            <a href="{{.PathPrefix}}/">Dashboard</a>
+            <a href="{{.PathPrefix}}/apps">Apps</a>
+            <a href="{{.PathPrefix}}/executions" class="active">History</a>
+        </div>
+        <div class="nav-user">
+            <span>{{.User.Username}}</span>
+            <form method="POST" action="{{.PathPrefix}}/logout" style="display:inline;">
+                <button type="submit" class="btn btn-sm">Logout</button>
+            </form>
+        </div>
+    </nav>
+
+    <main class="container">
+        <h1>Execution History</h1>
+
+        {{if .Executions}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>App</th>
+                    <th>Command</th>
+                    <th>User</th>
+                    <th>Status</th>
+                    <th>Exit Code</th>
+                    <th>Started</th>
+                    <th>Finished</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Executions}}
+                <tr>
+                    <td>{{.ID}}</td>
+                    <td>{{.AppName}}</td>
+                    <td>{{.CommandName}}</td>
+                    <td>{{.Username}}</td>
+                    <td><span class="status status-{{.Status}}">{{.Status}}</span></td>
+                    <td>{{if .ExitCode}}{{.ExitCode}}{{else}}-{{end}}</td>
+                    <td>{{if .StartedAt}}{{.StartedAt.Format "2006-01-02 15:04:05"}}{{else}}-{{end}}</td>
+                    <td>{{if .FinishedAt}}{{.FinishedAt.Format "2006-01-02 15:04:05"}}{{else}}-{{end}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <p class="empty">No executions yet.</p>
+        {{end}}
+    </main>
+
+    <script src="{{.PathPrefix}}/static/js/app.js"></script>
+</body>
+</html>

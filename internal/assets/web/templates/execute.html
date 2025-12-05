@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Execute: {{.Command.Name}} - HTTP Remote</title>
+    <link rel="stylesheet" href="{{.PathPrefix}}/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="{{.PathPrefix}}/">HTTP Remote</a>
+            <span class="version-badge">{{.Version}}</span>
+        </div>
+        <div class="nav-links">
+            <a href="{{.PathPrefix}}/">Dashboard</a>
+            <a href="{{.PathPrefix}}/apps">Apps</a>
+            <a href="{{.PathPrefix}}/executions">History</a>
+        </div>
+        <div class="nav-user">
+            <span>{{.User.Username}}</span>
+            <form method="POST" action="{{.PathPrefix}}/logout" style="display:inline;">
+                <button type="submit" class="btn btn-sm">Logout</button>
+            </form>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="breadcrumb">
+            <a href="{{.PathPrefix}}/apps">Apps</a> /
+            <a href="{{.PathPrefix}}/apps/{{.App.ID}}">{{.App.Name}}</a> /
+            {{.Command.Name}}
+        </div>
+
+        <div class="execute-header">
+            <h1>Execute: {{.Command.Name}}</h1>
+            <p class="description">{{.Command.Description}}</p>
+        </div>
+
+        <div class="execute-info">
+            <div class="info-row">
+                <span class="label">App:</span>
+                <span class="value">{{.App.Name}}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Working Directory:</span>
+                <span class="value"><code>{{.App.WorkingDir}}</code></span>
+            </div>
+            <div class="info-row">
+                <span class="label">Command:</span>
+                <pre class="value">{{.Command.Command}}</pre>
+            </div>
+            <div class="info-row">
+                <span class="label">Timeout:</span>
+                <span class="value">{{.Command.TimeoutSeconds}} seconds</span>
+            </div>
+        </div>
+
+        <div class="execute-controls">
+            <button id="executeBtn" class="btn btn-primary btn-lg" onclick="executeCommand()">
+                Execute Command
+            </button>
+            <span id="status" class="status-badge"></span>
+        </div>
+
+        <div class="output-container">
+            <div class="output-header">
+                <h3>Output</h3>
+                <button class="btn btn-sm" onclick="clearOutput()">Clear</button>
+            </div>
+            <pre id="output" class="output"></pre>
+        </div>
+    </main>
+
+    <script src="{{.PathPrefix}}/static/js/app.js"></script>
+    <script>
+        const pathPrefix = '{{.PathPrefix}}';
+        const commandId = '{{.Command.ID}}';
+        let eventSource = null;
+
+        function executeCommand() {
+            const btn = document.getElementById('executeBtn');
+            const status = document.getElementById('status');
+            const output = document.getElementById('output');
+
+            btn.disabled = true;
+            btn.textContent = 'Executing...';
+            status.textContent = 'Running';
+            status.className = 'status-badge status-running';
+            output.textContent = '';
+
+            fetch(pathPrefix + '/api/commands/' + commandId + '/execute', {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.execution_id) {
+                    streamOutput(data.execution_id);
+                } else {
+                    throw new Error(data.error || 'Failed to start execution');
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.textContent = 'Execute Command';
+                status.textContent = 'Error';
+                status.className = 'status-badge status-failed';
+                output.textContent = 'Error: ' + err.message;
+            });
+        }
+
+        function streamOutput(executionId) {
+            const output = document.getElementById('output');
+            const btn = document.getElementById('executeBtn');
+            const status = document.getElementById('status');
+
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            eventSource = new EventSource(pathPrefix + '/api/executions/' + executionId + '/stream');
+
+            eventSource.addEventListener('output', (e) => {
+                output.textContent += e.data + '\n';
+                output.scrollTop = output.scrollHeight;
+            });
+
+            eventSource.addEventListener('complete', (e) => {
+                const data = JSON.parse(e.data);
+                eventSource.close();
+                eventSource = null;
+
+                // Fetch final output from API to ensure we have all output
+                fetch(pathPrefix + '/api/executions/' + executionId)
+                    .then(res => res.json())
+                    .then(execData => {
+                        if (execData.output && execData.output.trim()) {
+                            output.textContent = execData.output;
+                            output.scrollTop = output.scrollHeight;
+                        }
+                    })
+                    .catch(() => {});
+
+                btn.disabled = false;
+                btn.textContent = 'Execute Command';
+
+                if (data.status === 'success') {
+                    status.textContent = 'Success (exit code: ' + data.exit_code + ')';
+                    status.className = 'status-badge status-success';
+                } else {
+                    status.textContent = 'Failed (exit code: ' + data.exit_code + ')';
+                    status.className = 'status-badge status-failed';
+                }
+            });
+
+            eventSource.onerror = () => {
+                eventSource.close();
+                eventSource = null;
+                btn.disabled = false;
+                btn.textContent = 'Execute Command';
+                status.textContent = 'Connection Error';
+                status.className = 'status-badge status-failed';
+            };
+        }
+
+        function clearOutput() {
+            document.getElementById('output').textContent = '';
+            document.getElementById('status').textContent = '';
+            document.getElementById('status').className = 'status-badge';
+        }
+    </script>
+</body>
+</html>

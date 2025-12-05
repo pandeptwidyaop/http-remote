@@ -1,0 +1,793 @@
+# HTTP Remote
+
+Tool DevOps untuk melakukan remote deployment dan eksekusi command pada server private melalui protokol HTTP. Cocok untuk server yang hanya bisa diakses via port 80/443 tanpa VPN.
+
+## Features
+
+- **Web UI & REST API** - Dashboard web dan API untuk otomatisasi
+- **App Management** - Kelola multiple aplikasi/project
+- **Command Templates** - Simpan command deployment untuk reuse
+- **Real-time Output** - Streaming output via SSE (Server-Sent Events)
+- **Session Auth** - Login dengan username/password untuk Web UI
+- **Token Auth** - Deploy via API menggunakan token (untuk CI/CD)
+- **UUID Identifiers** - Semua resource menggunakan UUID
+- **SQLite Database** - Portable, tidak perlu database server
+- **Single Binary** - Semua assets (HTML, CSS, JS) embedded dalam satu executable
+
+## Requirements
+
+- Go 1.21+
+- GCC (untuk kompilasi SQLite)
+
+## Installation
+
+### Single Binary (Recommended)
+
+Binary sudah include semua assets (HTML, CSS, JS) - tidak perlu folder `web/` terpisah.
+
+```bash
+# Clone repository
+git clone https://github.com/pandeptwidyaop/http-remote.git
+cd http-remote
+
+# Build single binary
+go build -o http-remote ./cmd/server
+
+# Run dari mana saja (tidak perlu folder web/)
+./http-remote
+
+# Atau dengan config custom
+./http-remote -config /path/to/config.yaml
+```
+
+### Cross-compile untuk Linux
+
+```bash
+# Build untuk Linux AMD64
+CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=x86_64-linux-musl-gcc \
+  go build -ldflags="-s -w" -o http-remote-linux-amd64 ./cmd/server
+
+# Build untuk Linux ARM64
+CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-musl-gcc \
+  go build -ldflags="-s -w" -o http-remote-linux-arm64 ./cmd/server
+```
+
+> **Note**: Cross-compile membutuhkan musl-cross toolchain karena CGO (SQLite).
+> Install via: `brew install FiloSottile/musl-cross/musl-cross`
+
+## Configuration
+
+Buat file `config.yaml`:
+
+```yaml
+server:
+  host: "0.0.0.0"
+  port: 8080
+  path_prefix: "/devops"
+
+database:
+  path: "./data/deploy.db"
+
+auth:
+  session_duration: "24h"
+  bcrypt_cost: 12
+
+execution:
+  default_timeout: 300   # seconds
+  max_timeout: 3600      # seconds
+  max_output_size: 10485760  # 10MB
+
+admin:
+  username: "admin"
+  password: "changeme"  # Ganti password ini!
+```
+
+## Quick Start
+
+### 1. Akses Web UI
+
+Buka browser ke `http://localhost:8080/devops/`
+
+Login dengan:
+- Username: `admin`
+- Password: `changeme`
+
+### 2. Buat App
+
+Klik "New App" dan isi:
+- **Name**: Nama aplikasi (e.g., `my-webapp`)
+- **Working Directory**: Path ke aplikasi (e.g., `/opt/apps/my-webapp`)
+
+### 3. Buat Command
+
+Pada halaman app, klik "New Command" dan isi:
+- **Name**: Nama command (e.g., `deploy`)
+- **Command**: Shell command yang akan dieksekusi
+- **Timeout**: Batas waktu eksekusi (seconds)
+
+Contoh command:
+```bash
+git pull origin main && docker-compose up -d --build
+```
+
+### 4. Execute
+
+Klik "Execute" pada command untuk menjalankannya. Output akan ditampilkan secara real-time.
+
+---
+
+## Deploy via API (Token Auth)
+
+Setiap app memiliki token unik yang bisa digunakan untuk trigger deployment tanpa login. Token bisa dilihat di halaman detail app.
+
+### Trigger Deployment
+
+```bash
+# Deploy menggunakan command default (command pertama)
+curl -X POST http://localhost:8080/devops/deploy/{app_uuid} \
+  -H "X-Deploy-Token: {token}"
+
+# Deploy dengan command spesifik
+curl -X POST http://localhost:8080/devops/deploy/{app_uuid} \
+  -H "X-Deploy-Token: {token}" \
+  -H "Content-Type: application/json" \
+  -d '{"command_id": "command-uuid"}'
+```
+
+Response:
+```json
+{
+  "message": "deployment started",
+  "execution_id": "exec-uuid",
+  "app_id": "app-uuid",
+  "app_name": "my-webapp",
+  "stream_url": "/devops/api/executions/exec-uuid/stream",
+  "status_url": "/devops/api/executions/exec-uuid"
+}
+```
+
+### Check Deployment Status
+
+```bash
+curl http://localhost:8080/devops/deploy/{app_uuid}/status/{execution_uuid} \
+  -H "X-Deploy-Token: {token}"
+```
+
+Response:
+```json
+{
+  "id": "exec-uuid",
+  "command_id": "cmd-uuid",
+  "status": "success",
+  "output": "Already up to date.\nContainer started.\n",
+  "exit_code": 0,
+  "started_at": "2024-01-15T10:30:00Z",
+  "finished_at": "2024-01-15T10:30:05Z"
+}
+```
+
+### Regenerate Token
+
+Jika token bocor, regenerate via Web UI atau API:
+
+```bash
+curl -X POST http://localhost:8080/devops/api/apps/{app_uuid}/regenerate-token \
+  -b "session_id=YOUR_SESSION_ID"
+```
+
+---
+
+## REST API Reference
+
+### Authentication
+
+```bash
+# Login
+curl -X POST http://localhost:8080/devops/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"changeme"}'
+
+# Logout
+curl -X POST http://localhost:8080/devops/api/auth/logout \
+  -b "session_id=YOUR_SESSION_ID"
+
+# Get current user
+curl http://localhost:8080/devops/api/auth/me \
+  -b "session_id=YOUR_SESSION_ID"
+```
+
+### Apps
+
+```bash
+# List apps
+curl http://localhost:8080/devops/api/apps \
+  -b "session_id=YOUR_SESSION_ID"
+
+# Create app
+curl -X POST http://localhost:8080/devops/api/apps \
+  -H "Content-Type: application/json" \
+  -b "session_id=YOUR_SESSION_ID" \
+  -d '{
+    "name": "my-app",
+    "description": "My Application",
+    "working_dir": "/opt/apps/my-app"
+  }'
+
+# Get app detail
+curl http://localhost:8080/devops/api/apps/{app_uuid} \
+  -b "session_id=YOUR_SESSION_ID"
+
+# Update app
+curl -X PUT http://localhost:8080/devops/api/apps/{app_uuid} \
+  -H "Content-Type: application/json" \
+  -b "session_id=YOUR_SESSION_ID" \
+  -d '{"description": "Updated description"}'
+
+# Delete app
+curl -X DELETE http://localhost:8080/devops/api/apps/{app_uuid} \
+  -b "session_id=YOUR_SESSION_ID"
+
+# Regenerate token
+curl -X POST http://localhost:8080/devops/api/apps/{app_uuid}/regenerate-token \
+  -b "session_id=YOUR_SESSION_ID"
+```
+
+### Commands
+
+```bash
+# List commands for app
+curl http://localhost:8080/devops/api/apps/{app_uuid}/commands \
+  -b "session_id=YOUR_SESSION_ID"
+
+# Create command
+curl -X POST http://localhost:8080/devops/api/apps/{app_uuid}/commands \
+  -H "Content-Type: application/json" \
+  -b "session_id=YOUR_SESSION_ID" \
+  -d '{
+    "name": "deploy",
+    "description": "Pull and restart containers",
+    "command": "git pull && docker-compose up -d --build",
+    "timeout_seconds": 600
+  }'
+
+# Get command detail
+curl http://localhost:8080/devops/api/commands/{command_uuid} \
+  -b "session_id=YOUR_SESSION_ID"
+
+# Update command
+curl -X PUT http://localhost:8080/devops/api/commands/{command_uuid} \
+  -H "Content-Type: application/json" \
+  -b "session_id=YOUR_SESSION_ID" \
+  -d '{"timeout_seconds": 900}'
+
+# Delete command
+curl -X DELETE http://localhost:8080/devops/api/commands/{command_uuid} \
+  -b "session_id=YOUR_SESSION_ID"
+
+# Execute command
+curl -X POST http://localhost:8080/devops/api/commands/{command_uuid}/execute \
+  -b "session_id=YOUR_SESSION_ID"
+```
+
+### Executions
+
+```bash
+# List executions
+curl http://localhost:8080/devops/api/executions \
+  -b "session_id=YOUR_SESSION_ID"
+
+# Get execution detail
+curl http://localhost:8080/devops/api/executions/{execution_uuid} \
+  -b "session_id=YOUR_SESSION_ID"
+
+# Stream execution output (SSE)
+curl http://localhost:8080/devops/api/executions/{execution_uuid}/stream \
+  -b "session_id=YOUR_SESSION_ID"
+```
+
+---
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger deployment
+        run: |
+          curl -X POST ${{ secrets.DEPLOY_URL }}/devops/deploy/${{ secrets.APP_ID }} \
+            -H "X-Deploy-Token: ${{ secrets.DEPLOY_TOKEN }}"
+```
+
+### GitLab CI
+
+```yaml
+deploy:
+  stage: deploy
+  script:
+    - |
+      curl -X POST ${DEPLOY_URL}/devops/deploy/${APP_ID} \
+        -H "X-Deploy-Token: ${DEPLOY_TOKEN}"
+  only:
+    - main
+```
+
+### Jenkins
+
+```groovy
+pipeline {
+    agent any
+    stages {
+        stage('Deploy') {
+            steps {
+                sh '''
+                    curl -X POST ${DEPLOY_URL}/devops/deploy/${APP_ID} \
+                      -H "X-Deploy-Token: ${DEPLOY_TOKEN}"
+                '''
+            }
+        }
+    }
+}
+```
+
+---
+
+## Traefik Integration
+
+### Traefik + HTTP Remote dalam Docker
+
+Jika keduanya berjalan di Docker:
+
+```yaml
+http:
+  routers:
+    devops:
+      rule: "Host(`app.example.com`) && PathPrefix(`/devops`)"
+      service: devops-service
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    devops-service:
+      loadBalancer:
+        servers:
+          - url: "http://http-remote:8080"
+```
+
+### Traefik di Docker + HTTP Remote di Host
+
+Untuk skenario dimana Traefik berjalan di Docker dan HTTP Remote berjalan langsung di host (systemd service):
+
+```
+Internet → Traefik (Docker, port 80/443) → Host (port 8080) → http-remote
+```
+
+**1. Docker Compose untuk Traefik:**
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.0
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./dynamic:/etc/traefik/dynamic:ro
+      - ./letsencrypt:/letsencrypt
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Penting untuk akses host dari Docker
+    restart: unless-stopped
+```
+
+**2. Traefik Static Config:**
+
+```yaml
+# traefik.yml
+api:
+  dashboard: true
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: your-email@example.com
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+```
+
+**3. Dynamic Config untuk HTTP Remote:**
+
+```yaml
+# dynamic/http-remote.yml
+http:
+  routers:
+    http-remote:
+      rule: "Host(`deploy.example.com`) && PathPrefix(`/devops`)"
+      service: http-remote
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    http-remote:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:8080"
+```
+
+**4. Pastikan HTTP Remote Listen di Semua Interface:**
+
+```yaml
+# /etc/http-remote/config.yaml
+server:
+  host: "0.0.0.0"  # Listen semua interface
+  port: 8080
+  path_prefix: "/devops"
+```
+
+**Alternatif: Menggunakan IP Docker Bridge**
+
+Jika `host.docker.internal` tidak tersedia:
+
+```bash
+# Dapatkan IP docker bridge
+ip addr show docker0
+# Output: inet 172.17.0.1/16
+```
+
+```yaml
+# dynamic/http-remote.yml
+http:
+  services:
+    http-remote:
+      loadBalancer:
+        servers:
+          - url: "http://172.17.0.1:8080"
+```
+
+**Verifikasi:**
+
+```bash
+# Test dari dalam container Traefik
+docker exec -it traefik wget -qO- http://host.docker.internal:8080/devops/login
+
+# Test dari luar via HTTPS
+curl https://deploy.example.com/devops/
+```
+
+---
+
+## Docker
+
+### Dockerfile
+
+```dockerfile
+FROM golang:1.21-alpine AS builder
+
+RUN apk add --no-cache gcc musl-dev
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=1 go build -o http-remote ./cmd/server
+
+FROM alpine:latest
+
+RUN apk add --no-cache ca-certificates tzdata
+
+WORKDIR /app
+
+COPY --from=builder /app/http-remote .
+COPY --from=builder /app/config.yaml .
+
+RUN mkdir -p /app/data
+
+EXPOSE 8080
+
+CMD ["./http-remote"]
+```
+
+### Docker Compose
+
+```yaml
+version: '3.8'
+
+services:
+  http-remote:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./config.yaml:/app/config.yaml
+    restart: unless-stopped
+```
+
+---
+
+## Linux Systemd Service
+
+Untuk menjalankan HTTP Remote sebagai service di Linux:
+
+### 1. Build dan Install Binary
+
+```bash
+# Build (single binary dengan embedded assets)
+go build -ldflags="-s -w" -o http-remote ./cmd/server
+
+# Copy binary ke /usr/local/bin
+sudo cp http-remote /usr/local/bin/
+sudo chmod +x /usr/local/bin/http-remote
+
+# Buat direktori untuk config dan data
+sudo mkdir -p /etc/http-remote
+sudo mkdir -p /var/lib/http-remote
+
+# Copy config
+sudo cp config.yaml /etc/http-remote/
+
+# Set permission
+sudo chown -R root:root /etc/http-remote
+sudo chown -R root:root /var/lib/http-remote
+```
+
+> **Note**: Tidak perlu copy folder `web/` karena sudah embedded dalam binary.
+
+### 2. Update Config Path
+
+Edit `/etc/http-remote/config.yaml`:
+
+```yaml
+server:
+  host: "0.0.0.0"
+  port: 8080
+  path_prefix: "/devops"
+
+database:
+  path: "/var/lib/http-remote/deploy.db"
+
+auth:
+  session_duration: "24h"
+  bcrypt_cost: 12
+
+execution:
+  default_timeout: 300
+  max_timeout: 3600
+  max_output_size: 10485760
+
+admin:
+  username: "admin"
+  password: "your-secure-password"
+```
+
+### 3. Buat Systemd Service
+
+Buat file `/etc/systemd/system/http-remote.service`:
+
+```ini
+[Unit]
+Description=HTTP Remote - DevOps Deployment Tool
+Documentation=https://github.com/pandeptwidyaop/http-remote
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/etc/http-remote
+ExecStart=/usr/local/bin/http-remote -config /etc/http-remote/config.yaml
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Environment
+Environment=GIN_MODE=release
+
+# Security hardening (optional)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/http-remote
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 4. Enable dan Start Service
+
+```bash
+# Reload systemd
+sudo systemctl daemon-reload
+
+# Enable service (auto-start on boot)
+sudo systemctl enable http-remote
+
+# Start service
+sudo systemctl start http-remote
+
+# Check status
+sudo systemctl status http-remote
+
+# View logs
+sudo journalctl -u http-remote -f
+```
+
+### 5. Service Commands
+
+```bash
+# Stop service
+sudo systemctl stop http-remote
+
+# Restart service
+sudo systemctl restart http-remote
+
+# Disable auto-start
+sudo systemctl disable http-remote
+
+# View recent logs
+sudo journalctl -u http-remote -n 100
+
+# View logs since today
+sudo journalctl -u http-remote --since today
+```
+
+### 6. Menjalankan dengan User Non-Root (Recommended)
+
+Untuk keamanan lebih baik, jalankan service dengan user khusus:
+
+```bash
+# Buat user dan group
+sudo useradd -r -s /bin/false http-remote
+
+# Set ownership
+sudo chown -R http-remote:http-remote /var/lib/http-remote
+sudo chown -R http-remote:http-remote /etc/http-remote
+
+# Update service file
+sudo sed -i 's/User=root/User=http-remote/' /etc/systemd/system/http-remote.service
+sudo sed -i 's/Group=root/Group=http-remote/' /etc/systemd/system/http-remote.service
+
+# Reload dan restart
+sudo systemctl daemon-reload
+sudo systemctl restart http-remote
+```
+
+> **Note**: Jika menggunakan user non-root, pastikan user tersebut memiliki akses ke working directory aplikasi yang akan di-deploy.
+
+### 7. Logrotate (Optional)
+
+Jika ingin rotasi log manual, buat `/etc/logrotate.d/http-remote`:
+
+```
+/var/log/http-remote/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 http-remote http-remote
+    postrotate
+        systemctl reload http-remote > /dev/null 2>&1 || true
+    endscript
+}
+```
+
+---
+
+## Security Notes
+
+1. **Ganti password default** setelah instalasi
+2. **Gunakan HTTPS** di production (via Traefik/Nginx)
+3. **Simpan token dengan aman** - jangan commit ke repository
+4. **Regenerate token** jika ada kebocoran
+5. **Batasi akses** ke path `/devops` via firewall/reverse proxy
+6. **Review command** sebelum menyimpan - hindari command berbahaya
+
+---
+
+## Project Structure
+
+```
+.
+├── cmd/server/main.go           # Entry point
+├── internal/
+│   ├── config/config.go         # Configuration loader
+│   ├── database/
+│   │   ├── database.go          # SQLite connection
+│   │   └── migrations.go        # DB schema
+│   ├── handlers/
+│   │   ├── auth.go              # Login/logout
+│   │   ├── apps.go              # App CRUD
+│   │   ├── commands.go          # Command CRUD & execute
+│   │   ├── deploy.go            # Token-based deploy API
+│   │   ├── stream.go            # SSE streaming
+│   │   └── web.go               # Web UI handlers
+│   ├── middleware/
+│   │   ├── auth.go              # Session auth middleware
+│   │   └── logging.go           # Request logging
+│   ├── models/                  # Data models
+│   ├── router/router.go         # Route definitions
+│   └── services/
+│       ├── auth.go              # Auth & session service
+│       ├── apps.go              # App & command service
+│       └── executor.go          # Command executor
+├── web/
+│   ├── static/css/style.css     # Styles
+│   ├── static/js/app.js         # Frontend JS
+│   └── templates/               # HTML templates
+├── config.yaml                  # Configuration
+├── Dockerfile
+├── go.mod
+└── README.md
+```
+
+---
+
+## API Endpoints Summary
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/devops/deploy/:app_id` | Token | Trigger deployment |
+| GET | `/devops/deploy/:app_id/status/:exec_id` | Token | Get deployment status |
+| POST | `/devops/api/auth/login` | - | Login |
+| POST | `/devops/api/auth/logout` | Session | Logout |
+| GET | `/devops/api/auth/me` | Session | Get current user |
+| GET | `/devops/api/apps` | Session | List apps |
+| POST | `/devops/api/apps` | Session | Create app |
+| GET | `/devops/api/apps/:id` | Session | Get app |
+| PUT | `/devops/api/apps/:id` | Session | Update app |
+| DELETE | `/devops/api/apps/:id` | Session | Delete app |
+| POST | `/devops/api/apps/:id/regenerate-token` | Session | Regenerate token |
+| GET | `/devops/api/apps/:id/commands` | Session | List commands |
+| POST | `/devops/api/apps/:id/commands` | Session | Create command |
+| GET | `/devops/api/commands/:id` | Session | Get command |
+| PUT | `/devops/api/commands/:id` | Session | Update command |
+| DELETE | `/devops/api/commands/:id` | Session | Delete command |
+| POST | `/devops/api/commands/:id/execute` | Session | Execute command |
+| GET | `/devops/api/executions` | Session | List executions |
+| GET | `/devops/api/executions/:id` | Session | Get execution |
+| GET | `/devops/api/executions/:id/stream` | Session | Stream output (SSE) |
+
+---
+
+## License
+
+MIT
