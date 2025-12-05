@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.1.0...v1.2.0) (2025-12-05)
+
+
+### Features
+
+* add self-upgrade command ([5b5689c](https://github.com/pandeptwidyaop/http-remote/commit/5b5689c04a8a19aa03830e84b1e4edeaded9148c))
+
 # [1.1.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.0.0...v1.1.0) (2025-12-05)
 
 
