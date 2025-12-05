@@ -87,6 +87,5 @@ func main() {
 
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
-		os.Exit(1)
 	}
 }

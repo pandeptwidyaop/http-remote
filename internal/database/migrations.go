@@ -97,11 +97,7 @@ func runMigrations(db *sql.DB) error {
 	}
 
 	// Run versioned migrations with tracking
-	if err := runVersionedMigrations(db); err != nil {
-		return err
-	}
-
-	return nil
+	return runVersionedMigrations(db)
 }
 
 // createMigrationsTable creates the migrations tracking table
