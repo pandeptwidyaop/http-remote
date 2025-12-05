@@ -1,5 +1,11 @@
 # HTTP Remote
 
+[![Test](https://github.com/pandeptwidyaop/http-remote/actions/workflows/test.yml/badge.svg)](https://github.com/pandeptwidyaop/http-remote/actions/workflows/test.yml)
+[![Release](https://github.com/pandeptwidyaop/http-remote/actions/workflows/release.yml/badge.svg)](https://github.com/pandeptwidyaop/http-remote/actions/workflows/release.yml)
+[![codecov](https://codecov.io/gh/pandeptwidyaop/http-remote/branch/main/graph/badge.svg)](https://codecov.io/gh/pandeptwidyaop/http-remote)
+[![Go Report Card](https://goreportcard.com/badge/github.com/pandeptwidyaop/http-remote)](https://goreportcard.com/report/github.com/pandeptwidyaop/http-remote)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Tool DevOps untuk melakukan remote deployment dan eksekusi command pada server private melalui protokol HTTP. Cocok untuk server yang hanya bisa diakses via port 80/443 tanpa VPN.
 
 ## Features

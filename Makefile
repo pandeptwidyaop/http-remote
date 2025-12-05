@@ -7,7 +7,7 @@ GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 PKG=github.com/pandeptwidyaop/http-remote/internal/version
 LDFLAGS=-ldflags="-s -w -X $(PKG).Version=$(VERSION) -X $(PKG).BuildTime=$(BUILD_TIME) -X $(PKG).GitCommit=$(GIT_COMMIT)"
 
-.PHONY: all build clean run dev test lint help
+.PHONY: all build clean run dev test test-race test-coverage test-coverage-summary test-database test-handlers test-services test-short test-ci lint fmt tidy help
 
 # Default target
 all: build
@@ -52,13 +52,49 @@ dev:
 
 # Run tests
 test:
-	go test -v ./...
+	@echo "Running tests..."
+	CGO_ENABLED=1 go test -v ./...
+
+# Run tests with race detector
+test-race:
+	@echo "Running tests with race detector..."
+	CGO_ENABLED=1 go test -v -race ./...
 
 # Run tests with coverage
 test-coverage:
-	go test -v -coverprofile=coverage.out ./...
+	@echo "Running tests with coverage..."
+	CGO_ENABLED=1 go test -v -coverprofile=coverage.out -covermode=atomic ./...
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
+
+# Run tests and show coverage percentage
+test-coverage-summary:
+	@echo "Running tests with coverage summary..."
+	CGO_ENABLED=1 go test -v -coverprofile=coverage.out -covermode=atomic ./...
+	@go tool cover -func=coverage.out | grep total | awk '{print "Total Coverage: " $$3}'
+
+# Run specific package tests
+test-database:
+	@echo "Running database tests..."
+	CGO_ENABLED=1 go test -v ./internal/database/...
+
+test-handlers:
+	@echo "Running handler tests..."
+	CGO_ENABLED=1 go test -v ./internal/handlers/...
+
+test-services:
+	@echo "Running service tests..."
+	CGO_ENABLED=1 go test -v ./internal/services/...
+
+# Run tests with short flag (skip slow tests)
+test-short:
+	@echo "Running short tests..."
+	CGO_ENABLED=1 go test -v -short ./...
+
+# Run tests and generate coverage badge
+test-ci:
+	@echo "Running tests for CI..."
+	CGO_ENABLED=1 go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
 # Lint code (requires golangci-lint)
 lint:
@@ -123,8 +159,15 @@ help:
 	@echo "  dev              Run with hot reload (requires air)"
 	@echo ""
 	@echo "Test:"
-	@echo "  test             Run tests"
-	@echo "  test-coverage    Run tests with coverage report"
+	@echo "  test                  Run all tests"
+	@echo "  test-race             Run tests with race detector"
+	@echo "  test-coverage         Run tests with HTML coverage report"
+	@echo "  test-coverage-summary Run tests and show coverage percentage"
+	@echo "  test-database         Run database tests only"
+	@echo "  test-handlers         Run handler tests only"
+	@echo "  test-services         Run service tests only"
+	@echo "  test-short            Run short tests (skip slow tests)"
+	@echo "  test-ci               Run tests for CI (with race + coverage)"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  fmt              Format code"
