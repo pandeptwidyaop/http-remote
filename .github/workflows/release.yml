@@ -42,21 +42,6 @@ jobs:
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            suffix: linux-amd64
-          - goos: linux
-            goarch: arm64
-            suffix: linux-arm64
-          - goos: darwin
-            goarch: amd64
-            suffix: darwin-amd64
-          - goos: darwin
-            goarch: arm64
-            suffix: darwin-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,38 +51,24 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Install cross-compiler
-        if: matrix.goos == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu gcc-x86-64-linux-gnu
-
-      - name: Build
+      - name: Build Linux AMD64
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
+          GOOS: linux
+          GOARCH: amd64
           CGO_ENABLED: 1
           VERSION: v${{ needs.release.outputs.new_release_version }}
         run: |
-          # Set CC based on target
-          if [ "$GOOS" = "linux" ] && [ "$GOARCH" = "amd64" ]; then
-            export CC=x86_64-linux-gnu-gcc
-          elif [ "$GOOS" = "linux" ] && [ "$GOARCH" = "arm64" ]; then
-            export CC=aarch64-linux-gnu-gcc
-          fi
-
-          # Build
           go build -ldflags="-s -w \
             -X github.com/pandeptwidyaop/http-remote/internal/version.Version=${VERSION} \
             -X github.com/pandeptwidyaop/http-remote/internal/version.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S') \
             -X github.com/pandeptwidyaop/http-remote/internal/version.GitCommit=${GITHUB_SHA::8}" \
-            -o http-remote-${{ matrix.suffix }} ./cmd/server
+            -o http-remote-linux-amd64 ./cmd/server
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: http-remote-${{ matrix.suffix }}
-          path: http-remote-${{ matrix.suffix }}
+          name: http-remote-linux-amd64
+          path: http-remote-linux-amd64
 
   publish:
     needs: [release, build]
