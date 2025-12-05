@@ -94,11 +94,11 @@ func (s *ExecutorService) GetExecutions(limit, offset int) ([]models.ExecutionWi
 	rows, err := s.db.Query(`
 		SELECT e.id, e.command_id, e.user_id, e.status, e.output, e.exit_code,
 		       e.started_at, e.finished_at, e.created_at,
-		       c.name as command_name, a.name as app_name, u.username
+		       c.name as command_name, a.name as app_name, COALESCE(u.username, 'API') as username
 		FROM executions e
 		JOIN commands c ON e.command_id = c.id
 		JOIN apps a ON c.app_id = a.id
-		JOIN users u ON e.user_id = u.id
+		LEFT JOIN users u ON e.user_id = u.id
 		ORDER BY e.created_at DESC
 		LIMIT ? OFFSET ?
 	`, limit, offset)
