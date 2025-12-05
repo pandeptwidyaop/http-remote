@@ -46,7 +46,7 @@ func (h *StreamHandler) streamExecution(c *gin.Context, id string) {
 			lines := strings.Split(execution.Output, "\n")
 			for _, line := range lines {
 				if line != "" {
-					fmt.Fprintf(c.Writer, "event: output\ndata: %s\n\n", line)
+					_, _ = fmt.Fprintf(c.Writer, "event: output\ndata: %s\n\n", line)
 				}
 			}
 		}
@@ -55,7 +55,7 @@ func (h *StreamHandler) streamExecution(c *gin.Context, id string) {
 		if execution.ExitCode != nil {
 			exitCode = *execution.ExitCode
 		}
-		fmt.Fprintf(c.Writer, "event: complete\ndata: {\"status\": \"%s\", \"exit_code\": %d}\n\n", execution.Status, exitCode)
+		_, _ = fmt.Fprintf(c.Writer, "event: complete\ndata: {\"status\": \"%s\", \"exit_code\": %d}\n\n", execution.Status, exitCode)
 		c.Writer.Flush()
 		return
 	}
@@ -77,7 +77,7 @@ func (h *StreamHandler) streamExecution(c *gin.Context, id string) {
 
 			if strings.HasPrefix(msg, "output:") {
 				line := strings.TrimPrefix(msg, "output:")
-				fmt.Fprintf(w, "event: output\ndata: %s\n\n", line)
+				_, _ = fmt.Fprintf(w, "event: output\ndata: %s\n\n", line)
 			} else if strings.HasPrefix(msg, "complete:") {
 				// Fetch final execution to get actual exit code and any remaining output
 				finalExec, err := h.executorService.GetExecutionByID(id)
@@ -87,7 +87,7 @@ func (h *StreamHandler) streamExecution(c *gin.Context, id string) {
 					exitCode = *finalExec.ExitCode
 					status = string(finalExec.Status)
 				}
-				fmt.Fprintf(w, "event: complete\ndata: {\"status\": \"%s\", \"exit_code\": %d}\n\n", status, exitCode)
+				_, _ = fmt.Fprintf(w, "event: complete\ndata: {\"status\": \"%s\", \"exit_code\": %d}\n\n", status, exitCode)
 				return false
 			}
 			return true

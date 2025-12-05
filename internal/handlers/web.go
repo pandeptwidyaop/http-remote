@@ -25,7 +25,11 @@ func NewWebHandler(appService *services.AppService, executorService *services.Ex
 }
 
 func (h *WebHandler) Dashboard(c *gin.Context) {
-	user, _ := c.Get(middleware.UserContextKey)
+	user, exists := c.Get(middleware.UserContextKey)
+	if !exists {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 	u := user.(*models.User)
 
 	apps, _ := h.appService.GetAllApps()
@@ -41,7 +45,11 @@ func (h *WebHandler) Dashboard(c *gin.Context) {
 }
 
 func (h *WebHandler) AppsPage(c *gin.Context) {
-	user, _ := c.Get(middleware.UserContextKey)
+	user, exists := c.Get(middleware.UserContextKey)
+	if !exists {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 	u := user.(*models.User)
 
 	apps, _ := h.appService.GetAllApps()
@@ -55,7 +63,11 @@ func (h *WebHandler) AppsPage(c *gin.Context) {
 }
 
 func (h *WebHandler) AppDetailPage(c *gin.Context) {
-	user, _ := c.Get(middleware.UserContextKey)
+	user, exists := c.Get(middleware.UserContextKey)
+	if !exists {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 	u := user.(*models.User)
 
 	id := c.Param("id")
@@ -78,7 +90,11 @@ func (h *WebHandler) AppDetailPage(c *gin.Context) {
 }
 
 func (h *WebHandler) ExecutePage(c *gin.Context) {
-	user, _ := c.Get(middleware.UserContextKey)
+	user, exists := c.Get(middleware.UserContextKey)
+	if !exists {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 	u := user.(*models.User)
 
 	id := c.Param("id")
@@ -101,7 +117,11 @@ func (h *WebHandler) ExecutePage(c *gin.Context) {
 }
 
 func (h *WebHandler) ExecutionsPage(c *gin.Context) {
-	user, _ := c.Get(middleware.UserContextKey)
+	user, exists := c.Get(middleware.UserContextKey)
+	if !exists {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 	u := user.(*models.User)
 
 	executions, _ := h.executorService.GetExecutions(50, 0)

@@ -73,7 +73,11 @@ func (h *CommandHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 
 	// Get command info before deleting for audit log
-	cmd, _ := h.appService.GetCommandByID(id)
+	cmd, err := h.appService.GetCommandByID(id)
+	if err != nil {
+		// If we can't get command, just ignore for audit purposes
+		cmd = nil
+	}
 
 	if err := h.appService.DeleteCommand(id); err != nil {
 		if err == services.ErrCommandNotFound {
@@ -106,7 +110,11 @@ func (h *CommandHandler) Execute(c *gin.Context) {
 		return
 	}
 
-	user, _ := c.Get(middleware.UserContextKey)
+	user, exists := c.Get(middleware.UserContextKey)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	u := user.(*models.User)
 
 	execution, err := h.executorService.CreateExecution(cmd.ID, u.ID)
@@ -115,7 +123,9 @@ func (h *CommandHandler) Execute(c *gin.Context) {
 		return
 	}
 
-	go h.executorService.Execute(execution.ID)
+	go func() {
+		_ = h.executorService.Execute(execution.ID)
+	}()
 
 	c.JSON(http.StatusAccepted, gin.H{
 		"execution_id": execution.ID,

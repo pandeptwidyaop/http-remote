@@ -57,7 +57,7 @@ func (h *DeployHandler) Deploy(c *gin.Context) {
 
 	// Get command - either from request body or default
 	var req DeployRequest
-	c.ShouldBindJSON(&req)
+	_ = c.ShouldBindJSON(&req) // Ignore error, req is optional
 
 	var commandID string
 	if req.CommandID != "" {
@@ -90,7 +90,9 @@ func (h *DeployHandler) Deploy(c *gin.Context) {
 	}
 
 	// Execute in background
-	go h.executorService.Execute(execution.ID)
+	go func() {
+		_ = h.executorService.Execute(execution.ID)
+	}()
 
 	c.JSON(http.StatusAccepted, gin.H{
 		"message":      "deployment started",

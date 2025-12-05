@@ -36,7 +36,10 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	r.SetHTMLTemplate(tmpl)
 
 	// Serve static files from embedded filesystem using individual routes
-	staticFS, _ := fs.Sub(assets.EmbeddedFiles, "web/static")
+	staticFS, err := fs.Sub(assets.EmbeddedFiles, "web/static")
+	if err != nil {
+		panic("Failed to access embedded static files: " + err.Error())
+	}
 	staticHandler := http.FileServer(http.FS(staticFS))
 	r.GET(cfg.Server.PathPrefix+"/static/*filepath", func(c *gin.Context) {
 		c.Request.URL.Path = c.Param("filepath")

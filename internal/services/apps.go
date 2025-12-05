@@ -90,7 +90,7 @@ func (s *AppService) GetAllApps() ([]models.App, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var apps []models.App
 	for rows.Next() {
