@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.4.0...v1.5.0) (2025-12-05)
+
+
+### Features
+
+* add streaming support for deploy API ([4cf3796](https://github.com/pandeptwidyaop/http-remote/commit/4cf37962d4d2221371874add1b0e0b722771f718))
+
 # [1.4.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.3.0...v1.4.0) (2025-12-05)
 
 
