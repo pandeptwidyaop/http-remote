@@ -84,6 +84,11 @@ var migrations = []string{
 }
 
 func runMigrations(db *sql.DB) error {
+	// Create migrations table to track which migrations have been run
+	if err := createMigrationsTable(db); err != nil {
+		return err
+	}
+
 	// Run initial migrations
 	for _, migration := range migrations {
 		if _, err := db.Exec(migration); err != nil {
@@ -91,9 +96,64 @@ func runMigrations(db *sql.DB) error {
 		}
 	}
 
-	// Run post-migrations for backward compatibility
-	if err := migrateExecutionsTable(db); err != nil {
+	// Run versioned migrations with tracking
+	if err := runVersionedMigrations(db); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// createMigrationsTable creates the migrations tracking table
+func createMigrationsTable(db *sql.DB) error {
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS migrations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			migration TEXT UNIQUE NOT NULL,
+			batch INTEGER NOT NULL,
+			executed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	return err
+}
+
+// hasMigrationRun checks if a migration has already been executed
+func hasMigrationRun(db *sql.DB, migrationName string) (bool, error) {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM migrations WHERE migration = ?", migrationName).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// recordMigration records a migration as executed
+func recordMigration(db *sql.DB, migrationName string, batch int) error {
+	_, err := db.Exec("INSERT INTO migrations (migration, batch) VALUES (?, ?)", migrationName, batch)
+	return err
+}
+
+// runVersionedMigrations runs migrations with version tracking
+func runVersionedMigrations(db *sql.DB) error {
+	// Get current batch number
+	var batch int
+	db.QueryRow("SELECT COALESCE(MAX(batch), 0) FROM migrations").Scan(&batch)
+	batch++
+
+	// Migration: Remove foreign key constraint from executions.user_id
+	migrationName := "2025_12_05_000001_remove_executions_user_fk"
+	hasRun, err := hasMigrationRun(db, migrationName)
+	if err != nil {
+		return err
+	}
+
+	if !hasRun {
+		if err := migrateExecutionsTable(db); err != nil {
+			return err
+		}
+		if err := recordMigration(db, migrationName, batch); err != nil {
+			return err
+		}
 	}
 
 	return nil
