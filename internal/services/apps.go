@@ -164,7 +164,10 @@ func (s *AppService) DeleteApp(id string) error {
 		return err
 	}
 
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
 	if rows == 0 {
 		return ErrAppNotFound
 	}
@@ -220,7 +223,7 @@ func (s *AppService) GetCommandsByAppID(appID string) ([]models.Command, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var commands []models.Command
 	for rows.Next() {

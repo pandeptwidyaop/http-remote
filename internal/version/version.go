@@ -1,3 +1,4 @@
+// Package version provides version information for the application.
 package version
 
 // These variables are set at build time using -ldflags

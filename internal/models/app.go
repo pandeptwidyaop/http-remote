@@ -1,3 +1,4 @@
+// Package models defines data models for applications, commands, and executions.
 package models
 
 import "time"
