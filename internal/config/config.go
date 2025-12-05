@@ -1,3 +1,4 @@
+// Package config provides configuration loading and management for the HTTP Remote application.
 package config
 
 import (
@@ -7,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Config represents the main application configuration structure.
 type Config struct {
 	Server    ServerConfig    `yaml:"server"`
 	Database  DatabaseConfig  `yaml:"database"`
@@ -15,33 +17,39 @@ type Config struct {
 	Admin     AdminConfig     `yaml:"admin"`
 }
 
+// ServerConfig holds HTTP server configuration.
 type ServerConfig struct {
-	Host       string `yaml:"host"`
-	Port       int    `yaml:"port"`
-	PathPrefix string `yaml:"path_prefix"`
-	SecureCookie bool `yaml:"secure_cookie"`
+	Host         string `yaml:"host"`
+	Port         int    `yaml:"port"`
+	PathPrefix   string `yaml:"path_prefix"`
+	SecureCookie bool   `yaml:"secure_cookie"`
 }
 
+// DatabaseConfig holds database configuration.
 type DatabaseConfig struct {
 	Path string `yaml:"path"`
 }
 
+// AuthConfig holds authentication and session configuration.
 type AuthConfig struct {
 	SessionDuration string `yaml:"session_duration"`
 	BcryptCost      int    `yaml:"bcrypt_cost"`
 }
 
+// ExecutionConfig holds command execution configuration.
 type ExecutionConfig struct {
 	DefaultTimeout int `yaml:"default_timeout"`
 	MaxTimeout     int `yaml:"max_timeout"`
 	MaxOutputSize  int `yaml:"max_output_size"`
 }
 
+// AdminConfig holds admin user credentials.
 type AdminConfig struct {
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 }
 
+// GetSessionDuration parses and returns the session duration as time.Duration.
 func (c *AuthConfig) GetSessionDuration() time.Duration {
 	d, err := time.ParseDuration(c.SessionDuration)
 	if err != nil {
@@ -50,6 +58,7 @@ func (c *AuthConfig) GetSessionDuration() time.Duration {
 	return d
 }
 
+// Load reads and parses a configuration file from the given path.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

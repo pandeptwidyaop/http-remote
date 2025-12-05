@@ -16,32 +16,42 @@ import (
 )
 
 var (
+	// ErrInvalidCredentials indicates incorrect username or password.
 	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrSessionExpired     = errors.New("session expired")
-	ErrSessionNotFound    = errors.New("session not found")
-	ErrUserNotFound       = errors.New("user not found")
-	ErrUserExists         = errors.New("user already exists")
+	// ErrSessionExpired indicates the session has expired.
+	ErrSessionExpired = errors.New("session expired")
+	// ErrSessionNotFound indicates the session does not exist.
+	ErrSessionNotFound = errors.New("session not found")
+	// ErrUserNotFound indicates the user does not exist.
+	ErrUserNotFound = errors.New("user not found")
+	// ErrUserExists indicates a user with the same username already exists.
+	ErrUserExists = errors.New("user already exists")
 )
 
+// AuthService handles user authentication and session management.
 type AuthService struct {
 	db  *database.DB
 	cfg *config.Config
 }
 
+// NewAuthService creates a new AuthService instance.
 func NewAuthService(db *database.DB, cfg *config.Config) *AuthService {
 	return &AuthService{db: db, cfg: cfg}
 }
 
+// HashPassword hashes a password using bcrypt.
 func (s *AuthService) HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), s.cfg.Auth.BcryptCost)
 	return string(bytes), err
 }
 
+// CheckPassword verifies if a password matches the hashed password.
 func (s *AuthService) CheckPassword(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
+// CreateUser creates a new user with a hashed password.
 func (s *AuthService) CreateUser(username, password string, isAdmin bool) (*models.User, error) {
 	hash, err := s.HashPassword(password)
 	if err != nil {
@@ -60,6 +70,7 @@ func (s *AuthService) CreateUser(username, password string, isAdmin bool) (*mode
 	return s.GetUserByID(id)
 }
 
+// GetUserByID retrieves a user by their ID.
 func (s *AuthService) GetUserByID(id int64) (*models.User, error) {
 	var user models.User
 	err := s.db.QueryRow(
@@ -76,6 +87,7 @@ func (s *AuthService) GetUserByID(id int64) (*models.User, error) {
 	return &user, nil
 }
 
+// GetUserByUsername retrieves a user by their username.
 func (s *AuthService) GetUserByUsername(username string) (*models.User, error) {
 	var user models.User
 	err := s.db.QueryRow(
@@ -92,6 +104,7 @@ func (s *AuthService) GetUserByUsername(username string) (*models.User, error) {
 	return &user, nil
 }
 
+// Login authenticates a user and creates a new session.
 func (s *AuthService) Login(username, password string) (*models.Session, error) {
 	user, err := s.GetUserByUsername(username)
 	if err != nil {
@@ -114,6 +127,7 @@ func (s *AuthService) InvalidateUserSessions(userID int64) error {
 	return err
 }
 
+// CreateSession creates a new session for a user.
 func (s *AuthService) CreateSession(userID int64) (*models.Session, error) {
 	sessionID := uuid.New().String()
 	expiresAt := time.Now().Add(s.cfg.Auth.GetSessionDuration())
@@ -134,6 +148,7 @@ func (s *AuthService) CreateSession(userID int64) (*models.Session, error) {
 	}, nil
 }
 
+// ValidateSession validates a session and returns the associated user.
 func (s *AuthService) ValidateSession(sessionID string) (*models.User, error) {
 	var session models.Session
 	err := s.db.QueryRow(
@@ -156,17 +171,19 @@ func (s *AuthService) ValidateSession(sessionID string) (*models.User, error) {
 	return s.GetUserByID(session.UserID)
 }
 
+// DeleteSession deletes a session by its ID.
 func (s *AuthService) DeleteSession(sessionID string) error {
 	_, err := s.db.Exec("DELETE FROM sessions WHERE id = ?", sessionID)
 	return err
 }
 
+// CleanExpiredSessions removes all expired sessions from the database.
 func (s *AuthService) CleanExpiredSessions() error {
 	_, err := s.db.Exec("DELETE FROM sessions WHERE expires_at < ?", time.Now())
 	return err
 }
 
-// GenerateSecurePassword generates a random password
+// GenerateSecurePassword generates a random password of the specified length.
 func (s *AuthService) GenerateSecurePassword(length int) (string, error) {
 	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
@@ -175,6 +192,7 @@ func (s *AuthService) GenerateSecurePassword(length int) (string, error) {
 	return base64.URLEncoding.EncodeToString(bytes)[:length], nil
 }
 
+// EnsureAdminUser ensures an admin user exists, creating one if needed.
 func (s *AuthService) EnsureAdminUser() error {
 	_, err := s.GetUserByUsername(s.cfg.Admin.Username)
 	if err == ErrUserNotFound {

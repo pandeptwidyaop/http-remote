@@ -1,3 +1,4 @@
+// Package services provides business logic for application management.
 package services
 
 import (
@@ -11,20 +12,27 @@ import (
 )
 
 var (
-	ErrAppNotFound     = errors.New("app not found")
-	ErrAppExists       = errors.New("app already exists")
+	// ErrAppNotFound indicates the requested app was not found.
+	ErrAppNotFound = errors.New("app not found")
+	// ErrAppExists indicates an app with the same name already exists.
+	ErrAppExists = errors.New("app already exists")
+	// ErrCommandNotFound indicates the requested command was not found.
 	ErrCommandNotFound = errors.New("command not found")
-	ErrInvalidToken    = errors.New("invalid token")
+	// ErrInvalidToken indicates the provided authentication token is invalid.
+	ErrInvalidToken = errors.New("invalid token")
 )
 
+// AppService manages applications and their commands.
 type AppService struct {
 	db *database.DB
 }
 
+// NewAppService creates a new AppService instance.
 func NewAppService(db *database.DB) *AppService {
 	return &AppService{db: db}
 }
 
+// CreateApp creates a new application with a generated token.
 func (s *AppService) CreateApp(req *models.CreateAppRequest) (*models.App, error) {
 	id := uuid.New().String()
 	token := uuid.New().String()
@@ -40,6 +48,7 @@ func (s *AppService) CreateApp(req *models.CreateAppRequest) (*models.App, error
 	return s.GetAppByID(id)
 }
 
+// GetAppByID retrieves an application by its ID.
 func (s *AppService) GetAppByID(id string) (*models.App, error) {
 	var app models.App
 	err := s.db.QueryRow(
@@ -56,6 +65,7 @@ func (s *AppService) GetAppByID(id string) (*models.App, error) {
 	return &app, nil
 }
 
+// GetAppByToken retrieves an application by its authentication token.
 func (s *AppService) GetAppByToken(token string) (*models.App, error) {
 	var app models.App
 	err := s.db.QueryRow(
@@ -72,6 +82,7 @@ func (s *AppService) GetAppByToken(token string) (*models.App, error) {
 	return &app, nil
 }
 
+// GetAllApps retrieves all applications ordered by name.
 func (s *AppService) GetAllApps() ([]models.App, error) {
 	rows, err := s.db.Query(
 		"SELECT id, name, description, working_dir, token, created_at, updated_at FROM apps ORDER BY name",
@@ -92,6 +103,7 @@ func (s *AppService) GetAllApps() ([]models.App, error) {
 	return apps, nil
 }
 
+// UpdateApp updates an existing application.
 func (s *AppService) UpdateApp(id string, req *models.UpdateAppRequest) (*models.App, error) {
 	app, err := s.GetAppByID(id)
 	if err != nil {
@@ -119,6 +131,7 @@ func (s *AppService) UpdateApp(id string, req *models.UpdateAppRequest) (*models
 	return s.GetAppByID(id)
 }
 
+// RegenerateToken generates a new authentication token for an application.
 func (s *AppService) RegenerateToken(id string) (*models.App, error) {
 	_, err := s.GetAppByID(id)
 	if err != nil {
@@ -137,6 +150,7 @@ func (s *AppService) RegenerateToken(id string) (*models.App, error) {
 	return s.GetAppByID(id)
 }
 
+// DeleteApp deletes an application and all related commands and executions.
 func (s *AppService) DeleteApp(id string) error {
 	// First delete related executions
 	_, err := s.db.Exec("DELETE FROM executions WHERE command_id IN (SELECT id FROM commands WHERE app_id = ?)", id)
@@ -157,6 +171,7 @@ func (s *AppService) DeleteApp(id string) error {
 	return nil
 }
 
+// CreateCommand creates a new command for an application.
 func (s *AppService) CreateCommand(appID string, req *models.CreateCommandRequest) (*models.Command, error) {
 	if _, err := s.GetAppByID(appID); err != nil {
 		return nil, err
@@ -179,6 +194,7 @@ func (s *AppService) CreateCommand(appID string, req *models.CreateCommandReques
 	return s.GetCommandByID(id)
 }
 
+// GetCommandByID retrieves a command by its ID.
 func (s *AppService) GetCommandByID(id string) (*models.Command, error) {
 	var cmd models.Command
 	err := s.db.QueryRow(
@@ -195,6 +211,7 @@ func (s *AppService) GetCommandByID(id string) (*models.Command, error) {
 	return &cmd, nil
 }
 
+// GetCommandsByAppID retrieves all commands for a specific application.
 func (s *AppService) GetCommandsByAppID(appID string) ([]models.Command, error) {
 	rows, err := s.db.Query(
 		"SELECT id, app_id, name, description, command, timeout_seconds, created_at FROM commands WHERE app_id = ? ORDER BY name",
@@ -216,6 +233,7 @@ func (s *AppService) GetCommandsByAppID(appID string) ([]models.Command, error) 
 	return commands, nil
 }
 
+// GetDefaultCommandByAppID retrieves the default (oldest) command for an application.
 func (s *AppService) GetDefaultCommandByAppID(appID string) (*models.Command, error) {
 	var cmd models.Command
 	err := s.db.QueryRow(
@@ -232,6 +250,7 @@ func (s *AppService) GetDefaultCommandByAppID(appID string) (*models.Command, er
 	return &cmd, nil
 }
 
+// UpdateCommand updates an existing command.
 func (s *AppService) UpdateCommand(id string, req *models.UpdateCommandRequest) (*models.Command, error) {
 	cmd, err := s.GetCommandByID(id)
 	if err != nil {
@@ -262,6 +281,7 @@ func (s *AppService) UpdateCommand(id string, req *models.UpdateCommandRequest) 
 	return s.GetCommandByID(id)
 }
 
+// DeleteCommand deletes a command and all related executions.
 func (s *AppService) DeleteCommand(id string) error {
 	// First delete related executions
 	_, err := s.db.Exec("DELETE FROM executions WHERE command_id = ?", id)
