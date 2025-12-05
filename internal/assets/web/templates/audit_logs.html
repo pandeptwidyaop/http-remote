@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Logs - HTTP Remote</title>
+    <link rel="stylesheet" href="{{.PathPrefix}}/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="{{.PathPrefix}}/">HTTP Remote</a>
+        </div>
+        <div class="nav-links">
+            <a href="{{.PathPrefix}}/">Dashboard</a>
+            <a href="{{.PathPrefix}}/apps">Apps</a>
+            <a href="{{.PathPrefix}}/executions">Executions</a>
+            <a href="{{.PathPrefix}}/audit-logs" class="active">Audit Logs</a>
+        </div>
+        <div class="nav-user">
+            <form action="{{.PathPrefix}}/logout" method="POST" style="margin: 0;">
+                <button type="submit" class="btn btn-sm">Logout</button>
+            </form>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <div>
+                <h1>Audit Logs</h1>
+                <p class="description">Security audit trail of all user actions</p>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 0; overflow: hidden;">
+            <div style="overflow-x: auto;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>User</th>
+                            <th>Action</th>
+                            <th>Resource</th>
+                            <th>IP Address</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs-tbody">
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 2rem;">
+                                Loading audit logs...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="pagination" style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem;">
+        </div>
+    </div>
+
+    <script>
+        const pathPrefix = '{{.PathPrefix}}';
+        let currentPage = 0;
+        const pageSize = 50;
+
+        async function loadLogs(page = 0) {
+            const offset = page * pageSize;
+            try {
+                const res = await fetch(`${pathPrefix}/api/audit-logs?limit=${pageSize}&offset=${offset}`);
+                if (!res.ok) throw new Error('Failed to load logs');
+
+                const logs = await res.json();
+                renderLogs(logs);
+                renderPagination(logs.length, page);
+            } catch (e) {
+                document.getElementById('logs-tbody').innerHTML = `
+                    <tr><td colspan="6" style="text-align: center; color: var(--danger);">
+                        Error loading logs: ${e.message}
+                    </td></tr>
+                `;
+            }
+        }
+
+        function renderLogs(logs) {
+            const tbody = document.getElementById('logs-tbody');
+
+            if (logs.length === 0) {
+                tbody.innerHTML = `
+                    <tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--gray-500);">
+                        No audit logs found
+                    </td></tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = logs.map(log => {
+                const time = new Date(log.created_at).toLocaleString();
+                const actionBadge = getActionBadge(log.action);
+                const resourceType = log.resource_type || '-';
+                const resourceId = log.resource_id ? `<code>${log.resource_id.substring(0, 8)}</code>` : '-';
+                const details = log.details ? formatDetails(log.details) : '-';
+
+                return `
+                    <tr>
+                        <td style="white-space: nowrap;">${time}</td>
+                        <td>${log.username || 'system'}</td>
+                        <td>${actionBadge}</td>
+                        <td>${resourceType} ${resourceId}</td>
+                        <td><code>${log.ip_address || '-'}</code></td>
+                        <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${details}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function getActionBadge(action) {
+            const badges = {
+                'login_success': '<span class="status status-success">Login Success</span>',
+                'login_failed': '<span class="status status-failed">Login Failed</span>',
+                'logout': '<span class="status status-pending">Logout</span>',
+                'create': '<span class="status status-running">Create</span>',
+                'update': '<span class="status status-running">Update</span>',
+                'delete': '<span class="status status-failed">Delete</span>',
+                'execute': '<span class="status status-running">Execute</span>',
+            };
+            return badges[action] || `<span class="status">${action}</span>`;
+        }
+
+        function formatDetails(detailsStr) {
+            try {
+                const details = JSON.parse(detailsStr);
+                return Object.entries(details)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(', ');
+            } catch {
+                return detailsStr;
+            }
+        }
+
+        function renderPagination(count, page) {
+            const pagination = document.getElementById('pagination');
+
+            if (count < pageSize && page === 0) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            if (page > 0) {
+                html += `<button class="btn" onclick="changePage(${page - 1})">Previous</button>`;
+            }
+            html += `<span style="padding: 0.5rem 1rem;">Page ${page + 1}</span>`;
+            if (count === pageSize) {
+                html += `<button class="btn" onclick="changePage(${page + 1})">Next</button>`;
+            }
+
+            pagination.innerHTML = html;
+        }
+
+        function changePage(page) {
+            currentPage = page;
+            loadLogs(page);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Load initial data
+        loadLogs(0);
+    </script>
+</body>
+</html>

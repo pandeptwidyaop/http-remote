@@ -137,3 +137,74 @@ func (s *AuditService) LogCommandExecute(username string, userID *int64, command
 		},
 	})
 }
+
+type AuditLogEntry struct {
+	ID           int64  `json:"id"`
+	UserID       *int64 `json:"user_id"`
+	Username     string `json:"username"`
+	Action       string `json:"action"`
+	ResourceType string `json:"resource_type"`
+	ResourceID   string `json:"resource_id"`
+	IPAddress    string `json:"ip_address"`
+	UserAgent    string `json:"user_agent"`
+	Details      string `json:"details"`
+	CreatedAt    string `json:"created_at"`
+}
+
+// GetLogs retrieves audit logs with pagination
+func (s *AuditService) GetLogs(limit, offset int) ([]AuditLogEntry, error) {
+	if limit == 0 {
+		limit = 50
+	}
+
+	rows, err := s.db.Query(`
+		SELECT id, user_id, username, action, resource_type, resource_id, ip_address, user_agent, details, created_at
+		FROM audit_logs
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []AuditLogEntry
+	for rows.Next() {
+		var log AuditLogEntry
+		var resourceID, ipAddress, userAgent, details *string
+		var userIDInt *int64
+
+		if err := rows.Scan(
+			&log.ID,
+			&userIDInt,
+			&log.Username,
+			&log.Action,
+			&log.ResourceType,
+			&resourceID,
+			&ipAddress,
+			&userAgent,
+			&details,
+			&log.CreatedAt,
+		); err != nil {
+			continue
+		}
+
+		log.UserID = userIDInt
+		if resourceID != nil {
+			log.ResourceID = *resourceID
+		}
+		if ipAddress != nil {
+			log.IPAddress = *ipAddress
+		}
+		if userAgent != nil {
+			log.UserAgent = *userAgent
+		}
+		if details != nil {
+			log.Details = *details
+		}
+
+		logs = append(logs, log)
+	}
+
+	return logs, nil
+}

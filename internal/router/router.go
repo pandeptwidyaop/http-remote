@@ -51,6 +51,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	streamHandler := handlers.NewStreamHandler(executorService)
 	webHandler := handlers.NewWebHandler(appService, executorService, cfg.Server.PathPrefix)
 	deployHandler := handlers.NewDeployHandler(appService, executorService, cfg.Server.PathPrefix)
+	auditHandler := handlers.NewAuditHandler(auditService, cfg.Server.PathPrefix)
 
 	// Rate limiters
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)     // 5 req/min for login
@@ -96,6 +97,8 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 			protected.GET("/executions", commandHandler.ListExecutions)
 			protected.GET("/executions/:id", commandHandler.GetExecution)
 			protected.GET("/executions/:id/stream", streamHandler.Stream)
+
+			protected.GET("/audit-logs", auditHandler.List)
 		}
 	}
 
@@ -107,6 +110,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 		web.GET("/apps/:id", webHandler.AppDetailPage)
 		web.GET("/execute/:id", webHandler.ExecutePage)
 		web.GET("/executions", webHandler.ExecutionsPage)
+		web.GET("/audit-logs", auditHandler.Page)
 		web.POST("/logout", authHandler.Logout)
 	}
 
