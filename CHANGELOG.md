@@ -1,3 +1,17 @@
+# [1.6.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.5.0...v1.6.0) (2025-12-05)
+
+
+### Bug Fixes
+
+* show API deployment executions in history ([2100cf1](https://github.com/pandeptwidyaop/http-remote/commit/2100cf196d01a4815dbae74d1f53be5bf54da270))
+
+
+### Features
+
+* add CI/CD pipeline and improve test coverage from 10.8% to 19.6% ([8132983](https://github.com/pandeptwidyaop/http-remote/commit/8132983edf9456f9e96ccca952a3b9fe710a73d4))
+* add comprehensive unit tests and backward-compatible migrations ([024c244](https://github.com/pandeptwidyaop/http-remote/commit/024c244c8a36384db48c6e3242efec828ca14d30))
+* add new version notification banner in web UI ([d096a8a](https://github.com/pandeptwidyaop/http-remote/commit/d096a8af6e39a06629985e4960aa8d7f0390d21e))
+
 # [1.5.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.4.0...v1.5.0) (2025-12-05)
 
 
