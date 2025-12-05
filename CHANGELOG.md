@@ -1,3 +1,15 @@
+# [1.4.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.3.0...v1.4.0) (2025-12-05)
+
+
+### Bug Fixes
+
+* remove foreign key constraint on executions.user_id ([1147de3](https://github.com/pandeptwidyaop/http-remote/commit/1147de306d7100a7f0368904824f614790be9daa))
+
+
+### Features
+
+* add Laravel-style migration tracking system ([b258272](https://github.com/pandeptwidyaop/http-remote/commit/b258272f3a88bf7af0f9b18a5c11e7f32f18723e))
+
 # [1.3.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.2.0...v1.3.0) (2025-12-05)
 
 
