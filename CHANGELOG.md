@@ -1,3 +1,13 @@
+## [1.6.1](https://github.com/pandeptwidyaop/http-remote/compare/v1.6.0...v1.6.1) (2025-12-05)
+
+
+### Bug Fixes
+
+* add package comments and improve error handling ([6b01582](https://github.com/pandeptwidyaop/http-remote/commit/6b01582c247a05c5e257b48fc60dbeca1f3dbccb))
+* add type assertion checks in handlers ([e672490](https://github.com/pandeptwidyaop/http-remote/commit/e672490894cb7480cabbeacc6e80ab70b5db23d7))
+* handle error returns in critical paths ([91b019e](https://github.com/pandeptwidyaop/http-remote/commit/91b019ef9995bf62ff619a72d08605bdd1e3e9b4))
+* improve error handling in handlers and fix rate limit headers ([88e408f](https://github.com/pandeptwidyaop/http-remote/commit/88e408fb8c33c3ae2671bb749a952f71655f087d))
+
 # [1.6.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.5.0...v1.6.0) (2025-12-05)
 
 
