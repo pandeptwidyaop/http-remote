@@ -64,6 +64,7 @@ server:
   host: "0.0.0.0"
   port: 8080
   path_prefix: "/devops"
+  secure_cookie: false  # Set true for production (requires HTTPS)
 
 database:
   path: "./data/deploy.db"
@@ -79,7 +80,7 @@ execution:
 
 admin:
   username: "admin"
-  password: "changeme"  # Ganti password ini!
+  password: "changeme"  # If left as "changeme", a secure random password will be generated on first run
 ```
 
 ## Quick Start
@@ -785,6 +786,72 @@ Jika ingin rotasi log manual, buat `/etc/logrotate.d/http-remote`:
 | GET | `/devops/api/executions` | Session | List executions |
 | GET | `/devops/api/executions/:id` | Session | Get execution |
 | GET | `/devops/api/executions/:id/stream` | Session | Stream output (SSE) |
+
+---
+
+## Security Features
+
+HTTP Remote implements multiple security layers to protect your deployment infrastructure:
+
+### Authentication & Session Management
+
+- **Bcrypt Password Hashing**: Cost factor 12 (configurable)
+- **Secure Session Cookies**: HttpOnly flag enabled, Secure flag configurable
+- **Session Regeneration**: Automatic session invalidation on login to prevent session fixation
+- **Auto-generated Passwords**: If default password "changeme" is detected, a secure random password is generated automatically
+
+### Rate Limiting
+
+Built-in rate limiting to prevent brute-force attacks:
+
+- **Login Endpoint**: 5 requests/minute
+- **API Endpoints**: 60 requests/minute
+- **Deploy Endpoint**: 30 requests/minute
+
+Rate limit headers included in responses:
+- `X-RateLimit-Limit`: Maximum requests allowed
+- `X-RateLimit-Remaining`: Requests remaining
+- `X-RateLimit-Reset`: Unix timestamp when limit resets
+- `Retry-After`: Seconds to wait before retry
+
+### Token Security
+
+- **Constant-time Comparison**: Prevents timing attacks on token validation
+- **UUID v4 Tokens**: Cryptographically random, non-predictable tokens
+
+### Audit Logging
+
+All sensitive operations are logged to `audit_logs` table:
+
+- User login/logout events
+- Command create/update/delete operations
+- Command execution with user and IP tracking
+
+### Production Deployment Recommendations
+
+1. **Enable Secure Cookies**:
+   ```yaml
+   server:
+     secure_cookie: true  # Requires HTTPS
+   ```
+
+2. **Use HTTPS**: Deploy behind reverse proxy (Traefik, Nginx, Caddy) with TLS
+
+3. **Change Default Credentials**: Either:
+   - Set a strong password in config
+   - Leave as "changeme" to auto-generate (password shown in logs on first run)
+
+4. **Firewall Rules**: Limit access to trusted IPs if possible
+
+5. **Regular Updates**: Use `http-remote upgrade` to keep up-to-date
+
+### Security Considerations
+
+⚠️ **Command Injection**: Users with Web UI access can execute arbitrary shell commands. Only grant access to trusted users.
+
+⚠️ **Working Directory**: Ensure working directories have appropriate permissions. Service should run as non-root user with limited privileges.
+
+⚠️ **Database Backup**: SQLite database contains tokens and audit logs. Backup securely.
 
 ---
 
