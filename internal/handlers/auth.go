@@ -10,14 +10,16 @@ import (
 )
 
 type AuthHandler struct {
-	authService *services.AuthService
-	pathPrefix  string
+	authService  *services.AuthService
+	pathPrefix   string
+	secureCookie bool
 }
 
-func NewAuthHandler(authService *services.AuthService, pathPrefix string) *AuthHandler {
+func NewAuthHandler(authService *services.AuthService, pathPrefix string, secureCookie bool) *AuthHandler {
 	return &AuthHandler{
-		authService: authService,
-		pathPrefix:  pathPrefix,
+		authService:  authService,
+		pathPrefix:   pathPrefix,
+		secureCookie: secureCookie,
 	}
 }
 
@@ -69,7 +71,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		int(session.ExpiresAt.Unix()-session.CreatedAt.Unix()),
 		"/",
 		"",
-		false,
+		h.secureCookie, // Use config value
 		true,
 	)
 
@@ -90,7 +92,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		h.authService.DeleteSession(sessionID)
 	}
 
-	c.SetCookie(middleware.SessionCookieName, "", -1, "/", "", false, true)
+	c.SetCookie(middleware.SessionCookieName, "", -1, "/", "", h.secureCookie, true)
 
 	if c.GetHeader("Content-Type") == "application/json" || c.GetHeader("Accept") == "application/json" {
 		c.JSON(http.StatusOK, gin.H{"message": "logged out"})

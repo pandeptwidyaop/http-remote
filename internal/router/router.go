@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pandeptwidyaop/http-remote/internal/assets"
@@ -44,19 +45,24 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 
 	prefix := r.Group(cfg.Server.PathPrefix)
 
-	authHandler := handlers.NewAuthHandler(authService, cfg.Server.PathPrefix)
+	authHandler := handlers.NewAuthHandler(authService, cfg.Server.PathPrefix, cfg.Server.SecureCookie)
 	appHandler := handlers.NewAppHandler(appService, cfg.Server.PathPrefix)
 	commandHandler := handlers.NewCommandHandler(appService, executorService, cfg.Server.PathPrefix)
 	streamHandler := handlers.NewStreamHandler(executorService)
 	webHandler := handlers.NewWebHandler(appService, executorService, cfg.Server.PathPrefix)
 	deployHandler := handlers.NewDeployHandler(appService, executorService, cfg.Server.PathPrefix)
 
-	prefix.GET("/login", authHandler.LoginPage)
-	prefix.POST("/login", authHandler.Login)
+	// Rate limiters
+	loginLimiter := middleware.NewRateLimiter(5, time.Minute)     // 5 req/min for login
+	apiLimiter := middleware.NewRateLimiter(60, time.Minute)      // 60 req/min for API
+	deployLimiter := middleware.NewRateLimiter(30, time.Minute)   // 30 req/min for deploy
 
-	// Public deploy endpoint (token auth)
-	prefix.POST("/deploy/:app_id", deployHandler.Deploy)
-	prefix.GET("/deploy/:app_id/status/:execution_id", deployHandler.DeployStatus)
+	prefix.GET("/login", authHandler.LoginPage)
+	prefix.POST("/login", loginLimiter.Middleware(), authHandler.Login)
+
+	// Public deploy endpoint (token auth) with rate limiting
+	prefix.POST("/deploy/:app_id", deployLimiter.Middleware(), deployHandler.Deploy)
+	prefix.GET("/deploy/:app_id/status/:execution_id", apiLimiter.Middleware(), deployHandler.DeployStatus)
 
 	api := prefix.Group("/api")
 	{
@@ -65,7 +71,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 			c.JSON(http.StatusOK, version.Info())
 		})
 
-		api.POST("/auth/login", authHandler.Login)
+		api.POST("/auth/login", loginLimiter.Middleware(), authHandler.Login)
 		api.POST("/auth/logout", authHandler.Logout)
 
 		protected := api.Group("")

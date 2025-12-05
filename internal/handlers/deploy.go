@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"crypto/subtle"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -48,7 +49,8 @@ func (h *DeployHandler) Deploy(c *gin.Context) {
 		return
 	}
 
-	if app.Token != token {
+	// Use constant-time comparison to prevent timing attacks
+	if subtle.ConstantTimeCompare([]byte(app.Token), []byte(token)) != 1 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
@@ -124,7 +126,8 @@ func (h *DeployHandler) DeployStatus(c *gin.Context) {
 		return
 	}
 
-	if app.Token != token {
+	// Use constant-time comparison to prevent timing attacks
+	if subtle.ConstantTimeCompare([]byte(app.Token), []byte(token)) != 1 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}

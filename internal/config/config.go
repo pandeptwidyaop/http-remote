@@ -19,6 +19,7 @@ type ServerConfig struct {
 	Host       string `yaml:"host"`
 	Port       int    `yaml:"port"`
 	PathPrefix string `yaml:"path_prefix"`
+	SecureCookie bool `yaml:"secure_cookie"`
 }
 
 type DatabaseConfig struct {

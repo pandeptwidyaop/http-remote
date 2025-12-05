@@ -1,8 +1,11 @@
 package services
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -99,7 +102,16 @@ func (s *AuthService) Login(username, password string) (*models.Session, error) 
 		return nil, ErrInvalidCredentials
 	}
 
+	// Invalidate old sessions for this user (session regeneration)
+	s.InvalidateUserSessions(user.ID)
+
 	return s.CreateSession(user.ID)
+}
+
+// InvalidateUserSessions removes all sessions for a user
+func (s *AuthService) InvalidateUserSessions(userID int64) error {
+	_, err := s.db.Exec("DELETE FROM sessions WHERE user_id = ?", userID)
+	return err
 }
 
 func (s *AuthService) CreateSession(userID int64) (*models.Session, error) {
@@ -154,10 +166,34 @@ func (s *AuthService) CleanExpiredSessions() error {
 	return err
 }
 
+// GenerateSecurePassword generates a random password
+func (s *AuthService) GenerateSecurePassword(length int) (string, error) {
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(bytes)[:length], nil
+}
+
 func (s *AuthService) EnsureAdminUser() error {
 	_, err := s.GetUserByUsername(s.cfg.Admin.Username)
 	if err == ErrUserNotFound {
-		_, err = s.CreateUser(s.cfg.Admin.Username, s.cfg.Admin.Password, true)
+		password := s.cfg.Admin.Password
+
+		// If default password is still "changeme", generate a random one
+		if password == "changeme" {
+			generated, err := s.GenerateSecurePassword(16)
+			if err != nil {
+				return err
+			}
+			password = generated
+			log.Printf("⚠️  WARNING: Default admin password detected!")
+			log.Printf("📝 Generated secure admin password: %s", password)
+			log.Printf("🔒 Please save this password and change it after first login")
+			log.Printf("   Username: %s", s.cfg.Admin.Username)
+		}
+
+		_, err = s.CreateUser(s.cfg.Admin.Username, password, true)
 		return err
 	}
 	return nil
