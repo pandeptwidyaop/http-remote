@@ -168,7 +168,8 @@ func (s *AuditService) GetLogs(limit, offset int) ([]AuditLogEntry, error) {
 	}
 	defer rows.Close()
 
-	var logs []AuditLogEntry
+	// Initialize empty slice instead of nil to return [] instead of null in JSON
+	logs := make([]AuditLogEntry, 0)
 	for rows.Next() {
 		var log AuditLogEntry
 		var resourceID, ipAddress, userAgent, details *string
