@@ -65,6 +65,7 @@
                 </div>
                 <div class="command-actions">
                     <a href="{{$.PathPrefix}}/execute/{{.ID}}" class="btn btn-primary">Execute</a>
+                    <button class="btn btn-sm" onclick="editCommand('{{.ID}}', '{{.Name}}', '{{.Description}}', `{{.Command}}`, {{.TimeoutSeconds}})">Edit</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteCommand('{{.ID}}')">Delete</button>
                 </div>
             </div>
@@ -75,6 +76,7 @@
         {{end}}
     </main>
 
+    <!-- Create Command Modal -->
     <div id="createCommandModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -106,11 +108,45 @@
         </div>
     </div>
 
+    <!-- Edit Command Modal -->
+    <div id="editCommandModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Command</h2>
+                <button class="close" onclick="hideModal('editCommandModal')">&times;</button>
+            </div>
+            <form id="editCommandForm">
+                <input type="hidden" id="edit_cmd_id" name="id">
+                <div class="form-group">
+                    <label for="edit_cmd_name">Name</label>
+                    <input type="text" id="edit_cmd_name" name="name" required placeholder="e.g., deploy">
+                </div>
+                <div class="form-group">
+                    <label for="edit_cmd_description">Description</label>
+                    <input type="text" id="edit_cmd_description" name="description" placeholder="What this command does">
+                </div>
+                <div class="form-group">
+                    <label for="edit_cmd_command">Command</label>
+                    <textarea id="edit_cmd_command" name="command" required rows="4" placeholder="git pull && docker-compose up -d"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="edit_cmd_timeout">Timeout (seconds)</label>
+                    <input type="number" id="edit_cmd_timeout" name="timeout_seconds" value="300" min="1" max="3600">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn" onclick="hideModal('editCommandModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="{{.PathPrefix}}/static/js/app.js"></script>
     <script>
         const pathPrefix = '{{.PathPrefix}}';
         const appId = '{{.App.ID}}';
 
+        // Create Command
         document.getElementById('createCommandForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const form = e.target;
@@ -139,6 +175,47 @@
             }
         });
 
+        // Edit Command - Open Modal
+        function editCommand(id, name, description, command, timeout) {
+            document.getElementById('edit_cmd_id').value = id;
+            document.getElementById('edit_cmd_name').value = name;
+            document.getElementById('edit_cmd_description').value = description;
+            document.getElementById('edit_cmd_command').value = command;
+            document.getElementById('edit_cmd_timeout').value = timeout;
+            showModal('editCommandModal');
+        }
+
+        // Edit Command - Submit
+        document.getElementById('editCommandForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const id = form.id.value;
+            const data = {
+                name: form.name.value,
+                description: form.description.value,
+                command: form.command.value,
+                timeout_seconds: parseInt(form.timeout_seconds.value) || 300
+            };
+
+            try {
+                const res = await fetch(pathPrefix + '/api/commands/' + id, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || 'Failed to update command');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        });
+
+        // Delete Command
         async function deleteCommand(id) {
             if (!confirm('Are you sure you want to delete this command?')) return;
 

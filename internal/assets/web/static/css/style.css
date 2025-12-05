@@ -350,6 +350,13 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
+    gap: 1rem;
+}
+
+.command-info {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .command-info h3 {
@@ -369,6 +376,10 @@ body {
     font-size: 0.875rem;
     overflow-x: auto;
     margin-bottom: 0.5rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 150px;
+    overflow-y: auto;
 }
 
 .command-info .meta {
@@ -490,6 +501,10 @@ body {
     border-radius: 0.25rem;
     font-size: 0.875rem;
     margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-width: 100%;
+    overflow-x: auto;
 }
 
 .execute-controls {
@@ -595,6 +610,13 @@ body {
     padding: 3rem;
     background: white;
     border-radius: 0.5rem;
+}
+
+/* API Info Card */
+.api-info .command-preview {
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: none;
 }
 
 /* Description */
