@@ -12,13 +12,15 @@ import (
 type CommandHandler struct {
 	appService      *services.AppService
 	executorService *services.ExecutorService
+	auditService    *services.AuditService
 	pathPrefix      string
 }
 
-func NewCommandHandler(appService *services.AppService, executorService *services.ExecutorService, pathPrefix string) *CommandHandler {
+func NewCommandHandler(appService *services.AppService, executorService *services.ExecutorService, auditService *services.AuditService, pathPrefix string) *CommandHandler {
 	return &CommandHandler{
 		appService:      appService,
 		executorService: executorService,
+		auditService:    auditService,
 		pathPrefix:      pathPrefix,
 	}
 }
@@ -58,11 +60,20 @@ func (h *CommandHandler) Update(c *gin.Context) {
 		return
 	}
 
+	// Audit log
+	user, _ := c.Get(middleware.UserContextKey)
+	if u, ok := user.(*models.User); ok {
+		h.auditService.LogCommandUpdate(u, cmd.ID, cmd.Name, c.ClientIP(), c.GetHeader("User-Agent"))
+	}
+
 	c.JSON(http.StatusOK, cmd)
 }
 
 func (h *CommandHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
+
+	// Get command info before deleting for audit log
+	cmd, _ := h.appService.GetCommandByID(id)
 
 	if err := h.appService.DeleteCommand(id); err != nil {
 		if err == services.ErrCommandNotFound {
@@ -71,6 +82,12 @@ func (h *CommandHandler) Delete(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Audit log
+	user, _ := c.Get(middleware.UserContextKey)
+	if u, ok := user.(*models.User); ok && cmd != nil {
+		h.auditService.LogCommandDelete(u, cmd.ID, cmd.Name, c.ClientIP(), c.GetHeader("User-Agent"))
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "command deleted"})

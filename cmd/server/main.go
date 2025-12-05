@@ -68,12 +68,13 @@ func main() {
 	authService := services.NewAuthService(db, cfg)
 	appService := services.NewAppService(db)
 	executorService := services.NewExecutorService(db, cfg, appService)
+	auditService := services.NewAuditService(db)
 
 	if err := authService.EnsureAdminUser(); err != nil {
 		log.Printf("Warning: Could not ensure admin user: %v", err)
 	}
 
-	r := router.New(cfg, authService, appService, executorService)
+	r := router.New(cfg, authService, appService, executorService, auditService)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("HTTP Remote %s starting on %s", version.Version, addr)

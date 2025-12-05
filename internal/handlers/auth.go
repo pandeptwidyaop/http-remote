@@ -11,13 +11,15 @@ import (
 
 type AuthHandler struct {
 	authService  *services.AuthService
+	auditService *services.AuditService
 	pathPrefix   string
 	secureCookie bool
 }
 
-func NewAuthHandler(authService *services.AuthService, pathPrefix string, secureCookie bool) *AuthHandler {
+func NewAuthHandler(authService *services.AuthService, auditService *services.AuditService, pathPrefix string, secureCookie bool) *AuthHandler {
 	return &AuthHandler{
 		authService:  authService,
+		auditService: auditService,
 		pathPrefix:   pathPrefix,
 		secureCookie: secureCookie,
 	}
@@ -54,6 +56,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	session, err := h.authService.Login(req.Username, req.Password)
 	if err != nil {
+		// Audit failed login attempt
+		h.auditService.Log(services.AuditLog{
+			Username:     req.Username,
+			Action:       "login_failed",
+			ResourceType: "auth",
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+		})
+
 		if c.GetHeader("Content-Type") == "application/json" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 			return
@@ -63,6 +74,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"Error":      "Invalid username or password",
 		})
 		return
+	}
+
+	// Get user for audit log
+	user, _ := h.authService.GetUserByID(session.UserID)
+	if user != nil {
+		h.auditService.LogLogin(user, c.ClientIP(), c.GetHeader("User-Agent"), true)
 	}
 
 	c.SetCookie(
@@ -87,6 +104,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
+	// Get user from context for audit log
+	userVal, exists := c.Get(middleware.UserContextKey)
+	if exists {
+		user := userVal.(*models.User)
+		h.auditService.LogLogout(user, c.ClientIP(), c.GetHeader("User-Agent"))
+	}
+
 	sessionID, _ := c.Cookie(middleware.SessionCookieName)
 	if sessionID != "" {
 		h.authService.DeleteSession(sessionID)

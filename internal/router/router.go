@@ -15,7 +15,7 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/version"
 )
 
-func New(cfg *config.Config, authService *services.AuthService, appService *services.AppService, executorService *services.ExecutorService) *gin.Engine {
+func New(cfg *config.Config, authService *services.AuthService, appService *services.AppService, executorService *services.ExecutorService, auditService *services.AuditService) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	r := gin.New()
@@ -45,9 +45,9 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 
 	prefix := r.Group(cfg.Server.PathPrefix)
 
-	authHandler := handlers.NewAuthHandler(authService, cfg.Server.PathPrefix, cfg.Server.SecureCookie)
+	authHandler := handlers.NewAuthHandler(authService, auditService, cfg.Server.PathPrefix, cfg.Server.SecureCookie)
 	appHandler := handlers.NewAppHandler(appService, cfg.Server.PathPrefix)
-	commandHandler := handlers.NewCommandHandler(appService, executorService, cfg.Server.PathPrefix)
+	commandHandler := handlers.NewCommandHandler(appService, executorService, auditService, cfg.Server.PathPrefix)
 	streamHandler := handlers.NewStreamHandler(executorService)
 	webHandler := handlers.NewWebHandler(appService, executorService, cfg.Server.PathPrefix)
 	deployHandler := handlers.NewDeployHandler(appService, executorService, cfg.Server.PathPrefix)
