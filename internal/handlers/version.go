@@ -8,10 +8,17 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/version"
 )
 
+// VersionHandler handles version information requests.
 type VersionHandler struct{}
 
+// NewVersionHandler creates a new VersionHandler instance.
 func NewVersionHandler() *VersionHandler {
 	return &VersionHandler{}
+}
+
+// Get returns version information.
+func (h *VersionHandler) Get(c *gin.Context) {
+	c.JSON(http.StatusOK, version.Info())
 }
 
 // CheckUpdate checks if a new version is available

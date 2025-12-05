@@ -10,12 +10,14 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/version"
 )
 
+// WebHandler handles web page rendering.
 type WebHandler struct {
 	appService      *services.AppService
 	executorService *services.ExecutorService
 	pathPrefix      string
 }
 
+// NewWebHandler creates a new WebHandler instance.
 func NewWebHandler(appService *services.AppService, executorService *services.ExecutorService, pathPrefix string) *WebHandler {
 	return &WebHandler{
 		appService:      appService,
@@ -24,6 +26,7 @@ func NewWebHandler(appService *services.AppService, executorService *services.Ex
 	}
 }
 
+// Dashboard renders the dashboard page.
 func (h *WebHandler) Dashboard(c *gin.Context) {
 	user, exists := c.Get(middleware.UserContextKey)
 	if !exists {
@@ -48,6 +51,7 @@ func (h *WebHandler) Dashboard(c *gin.Context) {
 	})
 }
 
+// AppsPage renders the applications list page.
 func (h *WebHandler) AppsPage(c *gin.Context) {
 	user, exists := c.Get(middleware.UserContextKey)
 	if !exists {
@@ -70,6 +74,7 @@ func (h *WebHandler) AppsPage(c *gin.Context) {
 	})
 }
 
+// AppDetailPage renders the application detail page.
 func (h *WebHandler) AppDetailPage(c *gin.Context) {
 	user, exists := c.Get(middleware.UserContextKey)
 	if !exists {
@@ -101,6 +106,7 @@ func (h *WebHandler) AppDetailPage(c *gin.Context) {
 	})
 }
 
+// ExecutePage renders the command execution page.
 func (h *WebHandler) ExecutePage(c *gin.Context) {
 	user, exists := c.Get(middleware.UserContextKey)
 	if !exists {
@@ -132,6 +138,7 @@ func (h *WebHandler) ExecutePage(c *gin.Context) {
 	})
 }
 
+// ExecutionsPage renders the executions list page.
 func (h *WebHandler) ExecutionsPage(c *gin.Context) {
 	user, exists := c.Get(middleware.UserContextKey)
 	if !exists {

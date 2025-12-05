@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// RateLimiter implements rate limiting using a sliding window algorithm.
 type RateLimiter struct {
 	requests map[string]*clientLimit
 	mu       sync.RWMutex
@@ -22,6 +23,7 @@ type clientLimit struct {
 	lastUpdate time.Time
 }
 
+// NewRateLimiter creates a new rate limiter with the specified limits.
 func NewRateLimiter(requestsPerWindow int, window time.Duration) *RateLimiter {
 	rl := &RateLimiter{
 		requests: make(map[string]*clientLimit),
@@ -51,6 +53,7 @@ func (rl *RateLimiter) cleanup() {
 	}
 }
 
+// Middleware returns a Gin middleware handler for rate limiting.
 func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		clientIP := c.ClientIP()

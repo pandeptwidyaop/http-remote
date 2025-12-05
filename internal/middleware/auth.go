@@ -9,10 +9,13 @@ import (
 )
 
 const (
+	// SessionCookieName is the name of the session cookie.
 	SessionCookieName = "session_id"
-	UserContextKey    = "user"
+	// UserContextKey is the key for storing user in request context.
+	UserContextKey = "user"
 )
 
+// AuthRequired is a middleware that requires authentication.
 func AuthRequired(authService *services.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sessionID, err := c.Cookie(SessionCookieName)

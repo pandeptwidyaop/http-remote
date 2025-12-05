@@ -40,6 +40,7 @@ func (h *AuthHandler) LoginPage(c *gin.Context) {
 	})
 }
 
+// Login handles user authentication.
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 
