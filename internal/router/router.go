@@ -64,6 +64,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	// Public deploy endpoint (token auth) with rate limiting
 	prefix.POST("/deploy/:app_id", deployLimiter.Middleware(), deployHandler.Deploy)
 	prefix.GET("/deploy/:app_id/status/:execution_id", apiLimiter.Middleware(), deployHandler.DeployStatus)
+	prefix.GET("/deploy/:app_id/stream/:execution_id", apiLimiter.Middleware(), deployHandler.DeployStream)
 
 	api := prefix.Group("/api")
 	{

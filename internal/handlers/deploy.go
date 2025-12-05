@@ -144,3 +144,49 @@ func (h *DeployHandler) DeployStatus(c *gin.Context) {
 
 	c.JSON(http.StatusOK, execution)
 }
+
+// DeployStream streams the execution output using SSE
+// GET /devops/deploy/:app_id/stream/:execution_id
+// Header: X-Deploy-Token: <token>
+func (h *DeployHandler) DeployStream(c *gin.Context) {
+	appID := c.Param("app_id")
+	executionID := c.Param("execution_id")
+	token := c.GetHeader("X-Deploy-Token")
+
+	if token == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing X-Deploy-Token header"})
+		return
+	}
+
+	// Verify app exists and token matches
+	app, err := h.appService.GetAppByID(appID)
+	if err != nil {
+		if err == services.ErrAppNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "app not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Use constant-time comparison to prevent timing attacks
+	if subtle.ConstantTimeCompare([]byte(app.Token), []byte(token)) != 1 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+
+	// Verify execution exists
+	_, err = h.executorService.GetExecutionByID(executionID)
+	if err != nil {
+		if err == services.ErrExecutionNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "execution not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Delegate to stream handler logic
+	streamHandler := NewStreamHandler(h.executorService)
+	streamHandler.streamExecution(c, executionID)
+}

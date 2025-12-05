@@ -23,7 +23,10 @@ func NewStreamHandler(executorService *services.ExecutorService) *StreamHandler 
 
 func (h *StreamHandler) Stream(c *gin.Context) {
 	id := c.Param("id")
+	h.streamExecution(c, id)
+}
 
+func (h *StreamHandler) streamExecution(c *gin.Context, id string) {
 	execution, err := h.executorService.GetExecutionByID(id)
 	if err != nil {
 		if err == services.ErrExecutionNotFound {
