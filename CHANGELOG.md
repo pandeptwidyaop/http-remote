@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.0.0...v1.1.0) (2025-12-05)
+
+
+### Features
+
+* add edit command functionality and fix long command display ([f83d568](https://github.com/pandeptwidyaop/http-remote/commit/f83d56801233af37c78fd412c6da98ec6bec1060))
+
 # 1.0.0 (2025-12-05)
 
 
