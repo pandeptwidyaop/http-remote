@@ -3,6 +3,7 @@ package models
 
 import "time"
 
+// App represents an application with its configuration.
 type App struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
@@ -13,12 +14,14 @@ type App struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// CreateAppRequest contains the data for creating a new application.
 type CreateAppRequest struct {
 	Name        string `json:"name" binding:"required"`
 	Description string `json:"description"`
 	WorkingDir  string `json:"working_dir" binding:"required"`
 }
 
+// UpdateAppRequest contains the data for updating an existing application.
 type UpdateAppRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`

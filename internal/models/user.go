@@ -2,6 +2,7 @@ package models
 
 import "time"
 
+// User represents a user account.
 type User struct {
 	ID           int64     `json:"id"`
 	Username     string    `json:"username"`
@@ -11,6 +12,7 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// Session represents a user session.
 type Session struct {
 	ID        string    `json:"id"`
 	UserID    int64     `json:"user_id"`
