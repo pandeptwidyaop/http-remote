@@ -9,6 +9,7 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
+// CommandHandler handles HTTP requests for command operations.
 type CommandHandler struct {
 	appService      *services.AppService
 	executorService *services.ExecutorService
@@ -16,6 +17,7 @@ type CommandHandler struct {
 	pathPrefix      string
 }
 
+// NewCommandHandler creates a new CommandHandler instance.
 func NewCommandHandler(appService *services.AppService, executorService *services.ExecutorService, auditService *services.AuditService, pathPrefix string) *CommandHandler {
 	return &CommandHandler{
 		appService:      appService,
@@ -25,6 +27,7 @@ func NewCommandHandler(appService *services.AppService, executorService *service
 	}
 }
 
+// Get retrieves a command by ID.
 func (h *CommandHandler) Get(c *gin.Context) {
 	id := c.Param("id")
 
@@ -41,6 +44,7 @@ func (h *CommandHandler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, cmd)
 }
 
+// Update updates a command.
 func (h *CommandHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 
@@ -69,6 +73,7 @@ func (h *CommandHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, cmd)
 }
 
+// Delete deletes a command.
 func (h *CommandHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 
@@ -97,6 +102,7 @@ func (h *CommandHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "command deleted"})
 }
 
+// Execute executes a command asynchronously.
 func (h *CommandHandler) Execute(c *gin.Context) {
 	id := c.Param("id")
 
@@ -137,6 +143,7 @@ func (h *CommandHandler) Execute(c *gin.Context) {
 	})
 }
 
+// ListExecutions lists all executions.
 func (h *CommandHandler) ListExecutions(c *gin.Context) {
 	limit := 50
 	offset := 0
@@ -150,6 +157,7 @@ func (h *CommandHandler) ListExecutions(c *gin.Context) {
 	c.JSON(http.StatusOK, executions)
 }
 
+// GetExecution retrieves an execution by ID.
 func (h *CommandHandler) GetExecution(c *gin.Context) {
 	id := c.Param("id")
 

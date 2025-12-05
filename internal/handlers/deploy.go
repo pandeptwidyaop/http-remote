@@ -8,12 +8,14 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
+// DeployHandler handles deployment webhook requests.
 type DeployHandler struct {
 	appService      *services.AppService
 	executorService *services.ExecutorService
 	pathPrefix      string
 }
 
+// NewDeployHandler creates a new DeployHandler instance.
 func NewDeployHandler(appService *services.AppService, executorService *services.ExecutorService, pathPrefix string) *DeployHandler {
 	return &DeployHandler{
 		appService:      appService,
@@ -22,6 +24,7 @@ func NewDeployHandler(appService *services.AppService, executorService *services
 	}
 }
 
+// DeployRequest contains the optional command ID for deployment.
 type DeployRequest struct {
 	CommandID string `json:"command_id"`
 }

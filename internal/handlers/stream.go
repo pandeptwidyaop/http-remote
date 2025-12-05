@@ -11,16 +11,19 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
+// StreamHandler handles Server-Sent Events (SSE) streaming for execution output.
 type StreamHandler struct {
 	executorService *services.ExecutorService
 }
 
+// NewStreamHandler creates a new StreamHandler instance.
 func NewStreamHandler(executorService *services.ExecutorService) *StreamHandler {
 	return &StreamHandler{
 		executorService: executorService,
 	}
 }
 
+// Stream streams execution output using Server-Sent Events.
 func (h *StreamHandler) Stream(c *gin.Context) {
 	id := c.Param("id")
 	h.streamExecution(c, id)
