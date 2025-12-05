@@ -52,15 +52,19 @@ func main() {
 	if err != nil {
 		log.Printf("Warning: Could not load config from %s: %v", *configPath, err)
 		log.Println("Using default configuration...")
-		cfg = &config.Config{}
-		config.Load("")
+		// Ignore error for default config as it's already handled
+		cfg, _ = config.Load("")
 	}
 
 	db, err := database.New(cfg.Database.Path)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("Error closing database: %v", err)
+		}
+	}()
 
 	if err := db.Migrate(); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)

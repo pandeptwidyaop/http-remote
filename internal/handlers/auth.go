@@ -61,7 +61,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	session, err := h.authService.Login(req.Username, req.Password)
 	if err != nil {
 		// Audit failed login attempt
-		h.auditService.Log(services.AuditLog{
+		_ = h.auditService.Log(services.AuditLog{
 			Username:     req.Username,
 			Action:       "login_failed",
 			ResourceType: "auth",
@@ -81,8 +81,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	// Get user for audit log
-	user, _ := h.authService.GetUserByID(session.UserID)
-	if user != nil {
+	if user, err := h.authService.GetUserByID(session.UserID); err == nil && user != nil {
 		h.auditService.LogLogin(user, c.ClientIP(), c.GetHeader("User-Agent"), true)
 	}
 
@@ -107,6 +106,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.Redirect(http.StatusFound, h.pathPrefix+"/")
 }
 
+// Logout logs out the current user.
 func (h *AuthHandler) Logout(c *gin.Context) {
 	// Get user from context for audit log
 	userVal, exists := c.Get(middleware.UserContextKey)
@@ -115,9 +115,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		h.auditService.LogLogout(user, c.ClientIP(), c.GetHeader("User-Agent"))
 	}
 
-	sessionID, _ := c.Cookie(middleware.SessionCookieName)
-	if sessionID != "" {
-		h.authService.DeleteSession(sessionID)
+	sessionID, err := c.Cookie(middleware.SessionCookieName)
+	if err == nil && sessionID != "" {
+		_ = h.authService.DeleteSession(sessionID)
 	}
 
 	c.SetCookie(middleware.SessionCookieName, "", -1, "/", "", h.secureCookie, true)

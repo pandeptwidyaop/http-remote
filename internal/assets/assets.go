@@ -14,18 +14,27 @@ var EmbeddedFiles embed.FS
 
 // GetTemplatesFS returns the templates filesystem.
 func GetTemplatesFS() fs.FS {
-	sub, _ := fs.Sub(EmbeddedFiles, "web/templates")
+	sub, err := fs.Sub(EmbeddedFiles, "web/templates")
+	if err != nil {
+		panic("failed to access embedded templates: " + err.Error())
+	}
 	return sub
 }
 
 // GetStaticFS returns the static files filesystem.
 func GetStaticFS() fs.FS {
-	sub, _ := fs.Sub(EmbeddedFiles, "web/static")
+	sub, err := fs.Sub(EmbeddedFiles, "web/static")
+	if err != nil {
+		panic("failed to access embedded static files: " + err.Error())
+	}
 	return sub
 }
 
 // GetStaticHTTPFS returns http.FileSystem for static files.
 func GetStaticHTTPFS() http.FileSystem {
-	sub, _ := fs.Sub(EmbeddedFiles, "web/static")
+	sub, err := fs.Sub(EmbeddedFiles, "web/static")
+	if err != nil {
+		panic("failed to access embedded static files: " + err.Error())
+	}
 	return http.FS(sub)
 }

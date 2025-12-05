@@ -137,7 +137,7 @@ func recordMigration(db *sql.DB, migrationName string, batch int) error {
 func runVersionedMigrations(db *sql.DB) error {
 	// Get current batch number
 	var batch int
-	db.QueryRow("SELECT COALESCE(MAX(batch), 0) FROM migrations").Scan(&batch)
+	_ = db.QueryRow("SELECT COALESCE(MAX(batch), 0) FROM migrations").Scan(&batch)
 	batch++
 
 	// Migration: Remove foreign key constraint from executions.user_id
@@ -196,7 +196,7 @@ func migrateExecutionsTable(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Create new executions table without user_id foreign key
 	_, err = tx.Exec(`
@@ -281,7 +281,7 @@ func addAppsUpdatedAtColumn(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Add the column with default NULL (SQLite limitation)
 	_, err = tx.Exec(`ALTER TABLE apps ADD COLUMN updated_at DATETIME`)
