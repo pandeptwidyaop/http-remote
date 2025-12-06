@@ -1,3 +1,20 @@
+# [1.7.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.6.1...v1.7.0) (2025-12-06)
+
+
+### Bug Fixes
+
+* clean up terminal handler and fix auth tests ([9623cf2](https://github.com/pandeptwidyaop/http-remote/commit/9623cf25f882a994e2c3af5ca765a2abc7a11a74))
+* terminal WebSocket path and CI/CD frontend build ([a043dbe](https://github.com/pandeptwidyaop/http-remote/commit/a043dbed4e62873e92a23ec8f3fab5d2fe3a95ce))
+
+
+### Features
+
+* add 2FA and password management with modern React UI ([4052ff8](https://github.com/pandeptwidyaop/http-remote/commit/4052ff8313006175d888559dd5d1ba29ae4998a8))
+* add AES-256-GCM encryption service for TOTP secrets ([43b4565](https://github.com/pandeptwidyaop/http-remote/commit/43b4565232dfbae2e464aa749ea4237b7d235401))
+* add backup codes support for 2FA recovery ([78d496f](https://github.com/pandeptwidyaop/http-remote/commit/78d496fc66926ea1edcd1c95787fe0f5d6700c14))
+* add rate limiting for 2FA endpoints ([3d109e6](https://github.com/pandeptwidyaop/http-remote/commit/3d109e6d1f842db0c85659f70c78e46b83f0cb31))
+* add WebSocket terminal for remote shell access ([8e4cf0c](https://github.com/pandeptwidyaop/http-remote/commit/8e4cf0c91b018776de2b7be3b0a3a6adae2821ed))
+
 ## [1.6.1](https://github.com/pandeptwidyaop/http-remote/compare/v1.6.0...v1.6.1) (2025-12-05)
 
 
