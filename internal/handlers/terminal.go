@@ -26,13 +26,6 @@ var upgrader = websocket.Upgrader{
 
 // TerminalHandler handles interactive terminal sessions over WebSocket.
 type TerminalHandler struct {
-	sessions sync.Map // map[string]*terminalSession
-}
-
-type terminalSession struct {
-	ws   *websocket.Conn
-	ptmx *os.File
-	cmd  *exec.Cmd
 }
 
 // NewTerminalHandler creates a new TerminalHandler instance.
@@ -61,7 +54,7 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 		log.Printf("Failed to upgrade to WebSocket: %v", err)
 		return
 	}
-	defer ws.Close()
+	defer func() { _ = ws.Close() }()
 
 	log.Printf("[Terminal] User %s connected", user.Username)
 
@@ -72,16 +65,11 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
 		log.Printf("Failed to start PTY: %v", err)
-		ws.WriteMessage(websocket.TextMessage, []byte("Failed to start terminal\r\n"))
+		_ = ws.WriteMessage(websocket.TextMessage, []byte("Failed to start terminal\r\n"))
 		return
 	}
-	defer ptmx.Close()
+	defer func() { _ = ptmx.Close() }()
 
-	_ = &terminalSession{
-		ws:   ws,
-		ptmx: ptmx,
-		cmd:  cmd,
-	}
 
 	// Handle terminal I/O
 	var wg sync.WaitGroup
@@ -128,6 +116,6 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 	}()
 
 	wg.Wait()
-	cmd.Process.Kill()
+	_ = cmd.Process.Kill()
 	log.Printf("[Terminal] User %s disconnected", user.Username)
 }

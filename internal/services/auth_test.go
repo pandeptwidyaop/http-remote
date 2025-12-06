@@ -20,13 +20,16 @@ func setupAuthTestDB(t *testing.T) (*database.DB, *sql.DB, *config.Config) {
 
 	db := &database.DB{DB: sqlDB}
 
-	// Create tables
+	// Create tables with 2FA columns
 	_, err = sqlDB.Exec(`
 		CREATE TABLE users (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			username TEXT NOT NULL UNIQUE,
 			password_hash TEXT NOT NULL,
 			is_admin BOOLEAN DEFAULT 0,
+			totp_secret TEXT,
+			totp_enabled BOOLEAN DEFAULT FALSE,
+			backup_codes TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
