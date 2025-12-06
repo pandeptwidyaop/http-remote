@@ -2,7 +2,6 @@
 package router
 
 import (
-	"html/template"
 	"io/fs"
 	"net/http"
 	"time"
@@ -22,40 +21,50 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	gin.SetMode(gin.ReleaseMode)
 
 	r := gin.New()
+	r.RedirectTrailingSlash = false
+	r.RedirectFixedPath = false
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logger())
 	r.Use(middleware.PathPrefix(cfg.Server.PathPrefix))
 
-	// Load templates from embedded filesystem
-	tmpl := template.New("").Funcs(template.FuncMap{
-		"add": func(a, b int) int { return a + b },
-	})
-
-	templatesFS := assets.GetTemplatesFS()
-	tmpl, err := tmpl.ParseFS(templatesFS, "*.html")
+	// Serve SPA static files from embedded filesystem
+	distFS, err := fs.Sub(assets.EmbeddedFiles, "web/dist")
 	if err != nil {
-		panic("Failed to parse templates: " + err.Error())
+		panic("Failed to load embedded SPA assets: " + err.Error())
 	}
-	r.SetHTMLTemplate(tmpl)
 
-	// Serve static files from embedded filesystem using individual routes
-	staticFS, err := fs.Sub(assets.EmbeddedFiles, "web/static")
-	if err != nil {
-		panic("Failed to access embedded static files: " + err.Error())
+	// Serve static assets (JS, CSS, etc.) under path prefix
+	// This ensures assets are served from /{prefix}/assets
+	assetHandler := func(c *gin.Context) {
+		filepath := c.Param("filepath")
+		assetPath := "assets" + filepath
+
+		data, err := fs.ReadFile(distFS, assetPath)
+		if err != nil {
+			c.String(http.StatusNotFound, "Asset not found")
+			return
+		}
+
+		// Determine content type based on file extension
+		contentType := "application/octet-stream"
+		if len(filepath) > 3 && filepath[len(filepath)-3:] == ".js" {
+			contentType = "application/javascript"
+		} else if len(filepath) > 4 && filepath[len(filepath)-4:] == ".css" {
+			contentType = "text/css"
+		}
+
+		c.Data(http.StatusOK, contentType, data)
 	}
-	staticHandler := http.FileServer(http.FS(staticFS))
-	r.GET(cfg.Server.PathPrefix+"/static/*filepath", func(c *gin.Context) {
-		c.Request.URL.Path = c.Param("filepath")
-		staticHandler.ServeHTTP(c.Writer, c.Request)
-	})
+	r.GET(cfg.Server.PathPrefix+"/assets/*filepath", assetHandler)
+	r.HEAD(cfg.Server.PathPrefix+"/assets/*filepath", assetHandler)
 
 	prefix := r.Group(cfg.Server.PathPrefix)
 
 	authHandler := handlers.NewAuthHandler(authService, auditService, cfg.Server.PathPrefix, cfg.Server.SecureCookie)
+	twoFAHandler := handlers.NewTwoFAHandler(authService)
 	appHandler := handlers.NewAppHandler(appService, cfg.Server.PathPrefix)
 	commandHandler := handlers.NewCommandHandler(appService, executorService, auditService, cfg.Server.PathPrefix)
 	streamHandler := handlers.NewStreamHandler(executorService)
-	webHandler := handlers.NewWebHandler(appService, executorService, cfg.Server.PathPrefix)
 	deployHandler := handlers.NewDeployHandler(appService, executorService, cfg.Server.PathPrefix)
 	auditHandler := handlers.NewAuditHandler(auditService, cfg.Server.PathPrefix)
 	versionHandler := handlers.NewVersionHandler()
@@ -64,9 +73,6 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)   // 5 req/min for login
 	apiLimiter := middleware.NewRateLimiter(60, time.Minute)    // 60 req/min for API
 	deployLimiter := middleware.NewRateLimiter(30, time.Minute) // 30 req/min for deploy
-
-	prefix.GET("/login", authHandler.LoginPage)
-	prefix.POST("/login", loginLimiter.Middleware(), authHandler.Login)
 
 	// Public deploy endpoint (token auth) with rate limiting
 	prefix.POST("/deploy/:app_id", deployLimiter.Middleware(), deployHandler.Deploy)
@@ -87,6 +93,16 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 		protected.Use(middleware.AuthRequired(authService))
 		{
 			protected.GET("/auth/me", authHandler.Me)
+
+			// 2FA endpoints
+			protected.GET("/2fa/status", twoFAHandler.GetStatus)
+			protected.POST("/2fa/generate-secret", twoFAHandler.GenerateSecret)
+			protected.GET("/2fa/qrcode", twoFAHandler.GetQRCode)
+			protected.POST("/2fa/enable", twoFAHandler.EnableTOTP)
+			protected.POST("/2fa/disable", twoFAHandler.DisableTOTP)
+
+			// Password management
+			protected.POST("/auth/change-password", authHandler.ChangePassword)
 
 			protected.GET("/apps", appHandler.List)
 			protected.POST("/apps", appHandler.Create)
@@ -111,16 +127,27 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 		}
 	}
 
-	web := prefix.Group("")
-	web.Use(middleware.AuthRequired(authService))
-	{
-		web.GET("/", webHandler.Dashboard)
-		web.GET("/apps", webHandler.AppsPage)
-		web.GET("/apps/:id", webHandler.AppDetailPage)
-		web.GET("/execute/:id", webHandler.ExecutePage)
-		web.GET("/executions", webHandler.ExecutionsPage)
-		web.GET("/audit-logs", auditHandler.Page)
-		web.POST("/logout", authHandler.Logout)
+	// Serve SPA at the path prefix
+	// This handles React Router's HashRouter
+	r.GET(cfg.Server.PathPrefix+"/", func(c *gin.Context) {
+		data, err := fs.ReadFile(distFS, "index.html")
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Failed to load index.html: "+err.Error())
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+	})
+
+	// Also handle without trailing slash
+	if cfg.Server.PathPrefix != "" && cfg.Server.PathPrefix != "/" {
+		r.GET(cfg.Server.PathPrefix, func(c *gin.Context) {
+			data, err := fs.ReadFile(distFS, "index.html")
+			if err != nil {
+				c.String(http.StatusInternalServerError, "Failed to load index.html: "+err.Error())
+				return
+			}
+			c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+		})
 	}
 
 	// Redirect root to path prefix (only if prefix is not empty)
@@ -129,6 +156,11 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 			c.Redirect(http.StatusFound, cfg.Server.PathPrefix+"/")
 		})
 	}
+
+	// NoRoute catch-all for any unmatched routes
+	r.NoRoute(func(c *gin.Context) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+	})
 
 	return r
 }

@@ -1,0 +1,242 @@
+package handlers
+
+import (
+	"bytes"
+	"encoding/base64"
+	"fmt"
+	"image/png"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/pandeptwidyaop/http-remote/internal/models"
+	"github.com/pandeptwidyaop/http-remote/internal/services"
+	"github.com/pquerna/otp"
+	"github.com/pquerna/otp/totp"
+)
+
+// TwoFAHandler handles two-factor authentication operations
+type TwoFAHandler struct {
+	authService *services.AuthService
+}
+
+// NewTwoFAHandler creates a new TwoFAHandler instance
+func NewTwoFAHandler(authService *services.AuthService) *TwoFAHandler {
+	return &TwoFAHandler{
+		authService: authService,
+	}
+}
+
+// SetupRequest represents the request to setup 2FA
+type SetupTOTPRequest struct {
+	Code string `json:"code" binding:"required"`
+}
+
+// SetupTOTPResponse represents the response for 2FA setup
+type SetupTOTPResponse struct {
+	Secret    string `json:"secret"`
+	QRCodeURL string `json:"qr_code_url"`
+}
+
+// VerifyTOTPRequest represents the request to verify TOTP code
+type VerifyTOTPRequest struct {
+	Code string `json:"code" binding:"required"`
+}
+
+// GenerateSecret generates a new TOTP secret for the user
+func (h *TwoFAHandler) GenerateSecret(c *gin.Context) {
+	userObj, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	user, ok := userObj.(*models.User)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+		return
+	}
+
+	// Generate TOTP key
+	key, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "HTTP Remote",
+		AccountName: user.Username,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate secret"})
+		return
+	}
+
+	// Store secret (but don't enable yet)
+	if err := h.authService.SetTOTPSecret(user.ID, key.Secret()); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store secret"})
+		return
+	}
+
+	c.JSON(http.StatusOK, SetupTOTPResponse{
+		Secret:    key.Secret(),
+		QRCodeURL: key.URL(),
+	})
+}
+
+// GetQRCode generates and returns QR code image
+func (h *TwoFAHandler) GetQRCode(c *gin.Context) {
+	userObj, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	user, ok := userObj.(*models.User)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+		return
+	}
+
+	if user.TOTPSecret == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "2FA not setup. Call /generate-secret first"})
+		return
+	}
+
+	// Create OTP key from existing secret
+	// Use otp.NewKeyFromURL to reconstruct the key properly
+	url := fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s",
+		"HTTP Remote",
+		user.Username,
+		user.TOTPSecret,
+		"HTTP Remote",
+	)
+
+	key, err := otp.NewKeyFromURL(url)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create key from secret"})
+		return
+	}
+
+	// Generate QR code image
+	img, err := key.Image(200, 200)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate QR code"})
+		return
+	}
+
+	// Encode to PNG
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode QR code"})
+		return
+	}
+
+	// Return as base64 data URL
+	base64Img := base64.StdEncoding.EncodeToString(buf.Bytes())
+	c.JSON(http.StatusOK, gin.H{
+		"qr_code": "data:image/png;base64," + base64Img,
+	})
+}
+
+// EnableTOTP enables 2FA after verifying the TOTP code
+func (h *TwoFAHandler) EnableTOTP(c *gin.Context) {
+	userObj, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	user, ok := userObj.(*models.User)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+		return
+	}
+
+	var req VerifyTOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if user.TOTPSecret == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "2FA not setup. Call /generate-secret first"})
+		return
+	}
+
+	// Verify the code
+	valid := totp.Validate(req.Code, user.TOTPSecret)
+	if !valid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid code"})
+		return
+	}
+
+	// Enable 2FA
+	if err := h.authService.EnableTOTP(user.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to enable 2FA"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "2FA enabled successfully",
+		"enabled": true,
+	})
+}
+
+// DisableTOTP disables 2FA after verifying the TOTP code
+func (h *TwoFAHandler) DisableTOTP(c *gin.Context) {
+	userObj, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	user, ok := userObj.(*models.User)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+		return
+	}
+
+	var req VerifyTOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !user.TOTPEnabled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "2FA is not enabled"})
+		return
+	}
+
+	// Verify the code
+	valid := totp.Validate(req.Code, user.TOTPSecret)
+	if !valid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid code"})
+		return
+	}
+
+	// Disable 2FA
+	if err := h.authService.DisableTOTP(user.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to disable 2FA"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "2FA disabled successfully",
+		"enabled": false,
+	})
+}
+
+// GetStatus returns the current 2FA status
+func (h *TwoFAHandler) GetStatus(c *gin.Context) {
+	userObj, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	user, ok := userObj.(*models.User)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"enabled": user.TOTPEnabled,
+		"setup":   user.TOTPSecret != "",
+	})
+}

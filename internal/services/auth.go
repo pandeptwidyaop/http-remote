@@ -74,10 +74,13 @@ func (s *AuthService) CreateUser(username, password string, isAdmin bool) (*mode
 // GetUserByID retrieves a user by their ID.
 func (s *AuthService) GetUserByID(id int64) (*models.User, error) {
 	var user models.User
+	var totpSecret sql.NullString
+	var totpEnabled sql.NullBool
+
 	err := s.db.QueryRow(
-		"SELECT id, username, password_hash, is_admin, created_at, updated_at FROM users WHERE id = ?",
+		"SELECT id, username, password_hash, is_admin, COALESCE(totp_secret, ''), COALESCE(totp_enabled, 0), created_at, updated_at FROM users WHERE id = ?",
 		id,
-	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &totpSecret, &totpEnabled, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, ErrUserNotFound
@@ -85,16 +88,22 @@ func (s *AuthService) GetUserByID(id int64) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	user.TOTPSecret = totpSecret.String
+	user.TOTPEnabled = totpEnabled.Bool
 	return &user, nil
 }
 
 // GetUserByUsername retrieves a user by their username.
 func (s *AuthService) GetUserByUsername(username string) (*models.User, error) {
 	var user models.User
+	var totpSecret sql.NullString
+	var totpEnabled sql.NullBool
+
 	err := s.db.QueryRow(
-		"SELECT id, username, password_hash, is_admin, created_at, updated_at FROM users WHERE username = ?",
+		"SELECT id, username, password_hash, is_admin, COALESCE(totp_secret, ''), COALESCE(totp_enabled, 0), created_at, updated_at FROM users WHERE username = ?",
 		username,
-	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &totpSecret, &totpEnabled, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, ErrUserNotFound
@@ -102,6 +111,9 @@ func (s *AuthService) GetUserByUsername(username string) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	user.TOTPSecret = totpSecret.String
+	user.TOTPEnabled = totpEnabled.Bool
 	return &user, nil
 }
 
@@ -216,4 +228,46 @@ func (s *AuthService) EnsureAdminUser() error {
 		return err
 	}
 	return nil
+}
+
+// SetTOTPSecret stores the TOTP secret for a user
+func (s *AuthService) SetTOTPSecret(userID int64, secret string) error {
+	_, err := s.db.Exec("UPDATE users SET totp_secret = ? WHERE id = ?", secret, userID)
+	return err
+}
+
+// EnableTOTP enables 2FA for a user
+func (s *AuthService) EnableTOTP(userID int64) error {
+	_, err := s.db.Exec("UPDATE users SET totp_enabled = 1 WHERE id = ?", userID)
+	return err
+}
+
+// DisableTOTP disables 2FA for a user and clears the secret
+func (s *AuthService) DisableTOTP(userID int64) error {
+	_, err := s.db.Exec("UPDATE users SET totp_enabled = 0, totp_secret = NULL WHERE id = ?", userID)
+	return err
+}
+
+// ChangePassword changes the password for a user after verifying the old password
+func (s *AuthService) ChangePassword(userID int64, oldPassword, newPassword string) error {
+	// Get user
+	user, err := s.GetUserByID(userID)
+	if err != nil {
+		return err
+	}
+
+	// Verify old password
+	if !s.CheckPassword(oldPassword, user.PasswordHash) {
+		return ErrInvalidCredentials
+	}
+
+	// Hash new password
+	hashedPassword, err := s.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+
+	// Update password
+	_, err = s.db.Exec("UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", hashedPassword, userID)
+	return err
 }
