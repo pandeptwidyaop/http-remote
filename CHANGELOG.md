@@ -1,3 +1,11 @@
+# [1.10.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.9.0...v1.10.0) (2025-12-06)
+
+
+### Features
+
+* add fullscreen mode to terminal ([2c70fa3](https://github.com/pandeptwidyaop/http-remote/commit/2c70fa3e48a967187a15a25ae63a10e5dc81b660))
+* add security hardening (WebSocket origin, TOTP encryption, headers) ([a85e137](https://github.com/pandeptwidyaop/http-remote/commit/a85e1375727138d4f02549f6d4c46997fb9e52d6))
+
 # [1.9.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.8.0...v1.9.0) (2025-12-06)
 
 
