@@ -100,7 +100,91 @@ execution:
 admin:
   username: "admin"
   password: "changeme"  # If left as "changeme", a secure random password will be generated on first run
+
+terminal:
+  shell: "/bin/bash"    # Shell to use (default: /bin/bash)
+  args: ["-l"]          # Shell arguments (default: ["-l"] for login shell)
+  env:                  # Additional environment variables
+    - "SUDO_ASKPASS=/usr/bin/ssh-askpass"
+  # enabled: true       # Set to false to disable terminal feature
 ```
+
+### Nginx Reverse Proxy Configuration
+
+Jika menggunakan Nginx sebagai reverse proxy untuk HTTP Remote:
+
+```nginx
+# /etc/nginx/sites-available/devops.conf
+
+upstream http_remote {
+    server 127.0.0.1:8080;
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    server_name devops.example.com;
+
+    # Redirect HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name devops.example.com;
+
+    # SSL Configuration
+    ssl_certificate /etc/letsencrypt/live/devops.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/devops.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
+    ssl_prefer_server_ciphers off;
+
+    # Security Headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # Proxy settings for /devops path
+    location /devops {
+        proxy_pass http://http_remote;
+        proxy_http_version 1.1;
+
+        # Headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket support (for terminal)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 3600s;  # Long timeout for terminal sessions
+
+        # Buffering (disable for SSE streaming)
+        proxy_buffering off;
+        proxy_cache off;
+    }
+
+    # Health check endpoint (optional)
+    location /devops/api/version {
+        proxy_pass http://http_remote;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        access_log off;
+    }
+}
+```
+
+**Catatan penting:**
+- `proxy_read_timeout 3600s` diperlukan untuk terminal WebSocket yang bisa berjalan lama
+- `proxy_buffering off` penting untuk SSE streaming output
+- `Upgrade` dan `Connection` headers diperlukan untuk WebSocket terminal
+- Gunakan `secure_cookie: true` di config.yaml saat menggunakan HTTPS
 
 ## Quick Start
 
