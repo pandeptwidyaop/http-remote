@@ -74,6 +74,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)   // 5 req/min for login
 	apiLimiter := middleware.NewRateLimiter(60, time.Minute)    // 60 req/min for API
 	deployLimiter := middleware.NewRateLimiter(30, time.Minute) // 30 req/min for deploy
+	twoFALimiter := middleware.NewRateLimiter(10, time.Minute)  // 10 req/min for 2FA operations
 
 	// Public deploy endpoint (token auth) with rate limiting
 	prefix.POST("/deploy/:app_id", deployLimiter.Middleware(), deployHandler.Deploy)
@@ -95,12 +96,12 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 		{
 			protected.GET("/auth/me", authHandler.Me)
 
-			// 2FA endpoints
+			// 2FA endpoints (rate limited to prevent brute force)
 			protected.GET("/2fa/status", twoFAHandler.GetStatus)
-			protected.POST("/2fa/generate-secret", twoFAHandler.GenerateSecret)
+			protected.POST("/2fa/generate-secret", twoFALimiter.Middleware(), twoFAHandler.GenerateSecret)
 			protected.GET("/2fa/qrcode", twoFAHandler.GetQRCode)
-			protected.POST("/2fa/enable", twoFAHandler.EnableTOTP)
-			protected.POST("/2fa/disable", twoFAHandler.DisableTOTP)
+			protected.POST("/2fa/enable", twoFALimiter.Middleware(), twoFAHandler.EnableTOTP)
+			protected.POST("/2fa/disable", twoFALimiter.Middleware(), twoFAHandler.DisableTOTP)
 
 			// Password management
 			protected.POST("/auth/change-password", authHandler.ChangePassword)
