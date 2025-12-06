@@ -69,6 +69,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	auditHandler := handlers.NewAuditHandler(auditService, cfg.Server.PathPrefix)
 	versionHandler := handlers.NewVersionHandler()
 	terminalHandler := handlers.NewTerminalHandler(&cfg.Terminal)
+	fileHandler := handlers.NewFileHandler(cfg)
 
 	// Rate limiters
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)   // 5 req/min for login
@@ -129,6 +130,17 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 
 			// Terminal WebSocket endpoint
 			protected.GET("/terminal/ws", terminalHandler.HandleWebSocket)
+
+			// File management endpoints
+			protected.GET("/files", fileHandler.ListFiles)
+			protected.GET("/files/read", fileHandler.ReadFile)
+			protected.GET("/files/download", fileHandler.DownloadFile)
+			protected.POST("/files/upload", fileHandler.UploadFile)
+			protected.POST("/files/mkdir", fileHandler.CreateDirectory)
+			protected.POST("/files/save", fileHandler.SaveFile)
+			protected.POST("/files/rename", fileHandler.RenameFile)
+			protected.POST("/files/copy", fileHandler.CopyFile)
+			protected.DELETE("/files", fileHandler.DeleteFile)
 		}
 	}
 

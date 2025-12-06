@@ -15,6 +15,7 @@ import Executions from './pages/Executions';
 import AuditLogs from './pages/AuditLogs';
 import Settings from './pages/Settings';
 import Terminal from './pages/Terminal';
+import Files from './pages/Files';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -125,6 +126,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Terminal />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/files"
+          element={
+            <ProtectedRoute>
+              <Files />
             </ProtectedRoute>
           }
         />
