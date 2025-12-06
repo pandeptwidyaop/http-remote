@@ -10,6 +10,10 @@ Tool DevOps untuk melakukan remote deployment dan eksekusi command pada server p
 
 ## Features
 
+- **Modern React SPA UI** - Built with React 18, TypeScript, and Tailwind CSS
+- **2FA/TOTP Support** - Two-factor authentication with encrypted secret storage (AES-256-GCM)
+- **Backup Codes** - Recovery codes for 2FA with encryption
+- **Remote Terminal** - Interactive WebSocket-based shell access with PTY support
 - **Web UI & REST API** - Dashboard web dan API untuk otomatisasi
 - **App Management** - Kelola multiple aplikasi/project
 - **Command Templates** - Simpan command deployment untuk reuse
@@ -19,11 +23,14 @@ Tool DevOps untuk melakukan remote deployment dan eksekusi command pada server p
 - **UUID Identifiers** - Semua resource menggunakan UUID
 - **SQLite Database** - Portable, tidak perlu database server
 - **Single Binary** - Semua assets (HTML, CSS, JS) embedded dalam satu executable
+- **Audit Logging** - Track all user actions and executions
+- **Rate Limiting** - Protection against brute force attacks
 
 ## Requirements
 
 - Go 1.21+
 - GCC (untuk kompilasi SQLite)
+- Node.js 18+ and npm (for building frontend)
 
 ## Installation
 
@@ -36,7 +43,13 @@ Binary sudah include semua assets (HTML, CSS, JS) - tidak perlu folder `web/` te
 git clone https://github.com/pandeptwidyaop/http-remote.git
 cd http-remote
 
-# Build single binary
+# Build frontend (React SPA)
+cd web
+npm install
+npm run build
+cd ..
+
+# Build single binary (includes embedded frontend assets)
 go build -o http-remote ./cmd/server
 
 # Run dari mana saja (tidak perlu folder web/)
@@ -120,6 +133,21 @@ git pull origin main && docker-compose up -d --build
 ### 4. Execute
 
 Klik "Execute" pada command untuk menjalankannya. Output akan ditampilkan secara real-time.
+
+### 5. Enable Two-Factor Authentication (Optional)
+
+1. Navigate to **Settings** page
+2. Click "Enable 2FA"
+3. Scan QR code with authenticator app (Google Authenticator, Authy, etc.)
+4. Enter 6-digit code to verify
+5. Save backup codes securely for account recovery
+
+### 6. Remote Terminal Access
+
+1. Navigate to **Terminal** page in the navigation menu
+2. Interactive shell session will open automatically
+3. Execute commands directly on the server with real-time output
+4. **Security Warning**: Terminal provides full shell access - use with caution
 
 ---
 
@@ -792,6 +820,13 @@ Jika ingin rotasi log manual, buat `/etc/logrotate.d/http-remote`:
 | GET | `/devops/api/executions` | Session | List executions |
 | GET | `/devops/api/executions/:id` | Session | Get execution |
 | GET | `/devops/api/executions/:id/stream` | Session | Stream output (SSE) |
+| GET | `/devops/api/2fa/status` | Session | Get 2FA status |
+| POST | `/devops/api/2fa/generate-secret` | Session | Generate TOTP secret |
+| GET | `/devops/api/2fa/qrcode` | Session | Get QR code for TOTP setup |
+| POST | `/devops/api/2fa/enable` | Session | Enable 2FA with verification |
+| POST | `/devops/api/2fa/disable` | Session | Disable 2FA |
+| GET | `/devops/api/terminal/ws` | Session | WebSocket terminal connection |
+| GET | `/devops/api/audit-logs` | Session | List audit logs |
 
 ---
 
@@ -805,6 +840,9 @@ HTTP Remote implements multiple security layers to protect your deployment infra
 - **Secure Session Cookies**: HttpOnly flag enabled, Secure flag configurable
 - **Session Regeneration**: Automatic session invalidation on login to prevent session fixation
 - **Auto-generated Passwords**: If default password "changeme" is detected, a secure random password is generated automatically
+- **Two-Factor Authentication (2FA/TOTP)**: Optional TOTP-based 2FA using authenticator apps (Google Authenticator, Authy, etc.)
+- **Encrypted TOTP Secrets**: TOTP secrets encrypted at rest using AES-256-GCM
+- **Backup Codes**: Encrypted recovery codes for 2FA account recovery
 
 ### Rate Limiting
 
@@ -813,6 +851,7 @@ Built-in rate limiting to prevent brute-force attacks:
 - **Login Endpoint**: 5 requests/minute
 - **API Endpoints**: 60 requests/minute
 - **Deploy Endpoint**: 30 requests/minute
+- **2FA Endpoints**: 10 requests/minute (generate, enable, disable)
 
 Rate limit headers included in responses:
 - `X-RateLimit-Limit`: Maximum requests allowed
