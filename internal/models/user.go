@@ -2,20 +2,23 @@ package models
 
 import "time"
 
+// User represents a user account.
 type User struct {
-	ID           int64     `json:"id"`
-	Username     string    `json:"username"`
-	PasswordHash string    `json:"-"`
-	IsAdmin      bool      `json:"is_admin"`
-	TOTPSecret   string    `json:"-"` // TOTP secret for 2FA
-	TOTPEnabled  bool      `json:"totp_enabled"` // Whether 2FA is enabled
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	Username     string    `json:"username"`
+	PasswordHash string    `json:"-"`
+	TOTPSecret   string    `json:"-"`            // TOTP secret for 2FA (encrypted)
+	BackupCodes  string    `json:"-"`            // Backup codes for 2FA recovery (encrypted JSON array)
+	ID           int64     `json:"id"`
+	TOTPEnabled  bool      `json:"totp_enabled"` // Whether 2FA is enabled
+	IsAdmin      bool      `json:"is_admin"`
 }
 
+// Session represents a user session.
 type Session struct {
-	ID        string    `json:"id"`
-	UserID    int64     `json:"user_id"`
 	ExpiresAt time.Time `json:"expires_at"`
 	CreatedAt time.Time `json:"created_at"`
+	ID        string    `json:"id"`
+	UserID    int64     `json:"user_id"`
 }

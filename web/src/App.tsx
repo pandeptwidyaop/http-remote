@@ -14,6 +14,7 @@ import Execute from './pages/Execute';
 import Executions from './pages/Executions';
 import AuditLogs from './pages/AuditLogs';
 import Settings from './pages/Settings';
+import Terminal from './pages/Terminal';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -115,6 +116,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Settings />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/terminal"
+          element={
+            <ProtectedRoute>
+              <Terminal />
             </ProtectedRoute>
           }
         />

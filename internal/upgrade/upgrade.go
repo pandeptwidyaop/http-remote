@@ -1,3 +1,4 @@
+// Package upgrade provides self-update functionality for the application.
 package upgrade
 
 import (
@@ -19,9 +20,12 @@ const (
 	downloadBase = "https://github.com/" + githubRepo + "/releases/download"
 )
 
+// GitHubRelease represents a GitHub release with its metadata.
 type GitHubRelease struct {
 	TagName string `json:"tag_name"`
 	Name    string `json:"name"`
+	HTMLURL string `json:"html_url"`
+	Body    string `json:"body"`
 	Assets  []struct {
 		Name               string `json:"name"`
 		BrowserDownloadURL string `json:"browser_download_url"`
@@ -34,7 +38,7 @@ func CheckLatestVersion() (*GitHubRelease, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to check for updates: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to check for updates: HTTP %d", resp.StatusCode)
@@ -87,7 +91,7 @@ func Download(url string, progressFn func(downloaded, total int64)) (string, err
 	if err != nil {
 		return "", fmt.Errorf("failed to download: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("failed to download: HTTP %d", resp.StatusCode)
@@ -98,7 +102,7 @@ func Download(url string, progressFn func(downloaded, total int64)) (string, err
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
-	defer tmpFile.Close()
+	defer func() { _ = tmpFile.Close() }()
 
 	// Download with progress
 	var downloaded int64
@@ -110,7 +114,7 @@ func Download(url string, progressFn func(downloaded, total int64)) (string, err
 		if n > 0 {
 			_, writeErr := tmpFile.Write(buf[:n])
 			if writeErr != nil {
-				os.Remove(tmpFile.Name())
+				_ = os.Remove(tmpFile.Name())
 				return "", fmt.Errorf("failed to write temp file: %w", writeErr)
 			}
 			downloaded += int64(n)
@@ -122,7 +126,7 @@ func Download(url string, progressFn func(downloaded, total int64)) (string, err
 			break
 		}
 		if err != nil {
-			os.Remove(tmpFile.Name())
+			_ = os.Remove(tmpFile.Name())
 			return "", fmt.Errorf("failed to download: %w", err)
 		}
 	}
@@ -153,19 +157,19 @@ func Install(tmpPath string) error {
 	// Move new binary to executable path
 	if err := os.Rename(tmpPath, execPath); err != nil {
 		// Try to restore backup
-		os.Rename(backupPath, execPath)
+		_ = os.Rename(backupPath, execPath)
 		return fmt.Errorf("failed to install new binary: %w", err)
 	}
 
 	// Make executable
 	if err := os.Chmod(execPath, 0755); err != nil {
 		// Try to restore backup
-		os.Rename(backupPath, execPath)
+		_ = os.Rename(backupPath, execPath)
 		return fmt.Errorf("failed to set permissions: %w", err)
 	}
 
 	// Remove backup
-	os.Remove(backupPath)
+	_ = os.Remove(backupPath)
 
 	return nil
 }
@@ -209,7 +213,7 @@ func Run(force bool) error {
 
 	fmt.Println("Installing...")
 	if err := Install(tmpPath); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return err
 	}
 

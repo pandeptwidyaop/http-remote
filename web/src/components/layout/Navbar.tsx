@@ -1,11 +1,19 @@
+import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Package, History, FileText, Settings } from 'lucide-react';
+import { LogOut, LayoutDashboard, Package, History, FileText, Settings, Terminal, X, ArrowUpCircle } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { useVersionStore } from '@/store/versionStore';
 import Button from '@/components/ui/Button';
 
 export default function Navbar() {
   const location = useLocation();
   const { user, logout } = useAuthStore();
+  const { version, updateInfo, dismissed, fetchVersion, checkForUpdates, dismissUpdate } = useVersionStore();
+
+  useEffect(() => {
+    fetchVersion();
+    checkForUpdates();
+  }, [fetchVersion, checkForUpdates]);
 
   const handleLogout = async () => {
     await logout();
@@ -15,6 +23,7 @@ export default function Navbar() {
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/apps', label: 'Apps', icon: Package },
     { path: '/executions', label: 'History', icon: History },
+    { path: '/terminal', label: 'Terminal', icon: Terminal },
     { path: '/audit-logs', label: 'Audit Logs', icon: FileText },
     { path: '/settings', label: 'Settings', icon: Settings },
   ];
@@ -23,9 +32,50 @@ export default function Navbar() {
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
+  const showUpdateBanner = updateInfo?.update_available && !dismissed;
+
   return (
-    <nav className="bg-gray-900 text-white shadow-lg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <>
+      {/* Update Available Banner */}
+      {showUpdateBanner && (
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <ArrowUpCircle className="h-5 w-5 animate-bounce" />
+              <span className="text-sm font-medium">
+                New version available: <strong>{updateInfo.latest_version}</strong>
+                {updateInfo.current_version && (
+                  <span className="text-blue-200 ml-1">
+                    (current: {updateInfo.current_version})
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              {updateInfo.release_url && (
+                <a
+                  href={updateInfo.release_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded transition-colors"
+                >
+                  View Release
+                </a>
+              )}
+              <button
+                onClick={dismissUpdate}
+                className="p-1 hover:bg-white/20 rounded transition-colors"
+                title="Dismiss"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <nav className="bg-gray-900 text-white shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Brand */}
           <div className="flex items-center space-x-2">
@@ -33,7 +83,7 @@ export default function Navbar() {
               HTTP Remote
             </Link>
             <span className="px-2 py-0.5 text-xs bg-gray-800 text-gray-400 rounded">
-              v1.0
+              {version?.version || 'dev'}
             </span>
           </div>
 
@@ -102,6 +152,7 @@ export default function Navbar() {
           })}
         </div>
       </div>
-    </nav>
+      </nav>
+    </>
   );
 }

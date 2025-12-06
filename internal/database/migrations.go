@@ -97,11 +97,7 @@ func runMigrations(db *sql.DB) error {
 	}
 
 	// Run versioned migrations with tracking
-	if err := runVersionedMigrations(db); err != nil {
-		return err
-	}
-
-	return nil
+	return runVersionedMigrations(db)
 }
 
 // createMigrationsTable creates the migrations tracking table
@@ -137,7 +133,7 @@ func recordMigration(db *sql.DB, migrationName string, batch int) error {
 func runVersionedMigrations(db *sql.DB) error {
 	// Get current batch number
 	var batch int
-	db.QueryRow("SELECT COALESCE(MAX(batch), 0) FROM migrations").Scan(&batch)
+	_ = db.QueryRow("SELECT COALESCE(MAX(batch), 0) FROM migrations").Scan(&batch)
 	batch++
 
 	// Migration: Remove foreign key constraint from executions.user_id
@@ -212,7 +208,7 @@ func migrateExecutionsTable(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Create new executions table without user_id foreign key
 	_, err = tx.Exec(`
@@ -297,7 +293,7 @@ func addAppsUpdatedAtColumn(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Add the column with default NULL (SQLite limitation)
 	_, err = tx.Exec(`ALTER TABLE apps ADD COLUMN updated_at DATETIME`)
@@ -372,6 +368,12 @@ func add2FAToUsers(db *sql.DB) error {
 
 	// Add totp_enabled column (whether user has enabled 2FA)
 	_, err = tx.Exec(`ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN DEFAULT FALSE`)
+	if err != nil {
+		return err
+	}
+
+	// Add backup_codes column (stores encrypted backup codes as JSON array)
+	_, err = tx.Exec(`ALTER TABLE users ADD COLUMN backup_codes TEXT`)
 	if err != nil {
 		return err
 	}

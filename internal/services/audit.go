@@ -7,25 +7,29 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/models"
 )
 
+// AuditService handles audit logging for user actions.
 type AuditService struct {
 	db *database.DB
 }
 
+// NewAuditService creates a new AuditService instance.
 func NewAuditService(db *database.DB) *AuditService {
 	return &AuditService{db: db}
 }
 
+// AuditLog represents an audit log entry to be recorded.
 type AuditLog struct {
 	UserID       *int64
+	Details      map[string]interface{}
 	Username     string
 	Action       string
 	ResourceType string
 	ResourceID   string
 	IPAddress    string
 	UserAgent    string
-	Details      map[string]interface{}
 }
 
+// Log records an audit log entry to the database.
 func (s *AuditService) Log(log AuditLog) error {
 	var detailsJSON string
 	if log.Details != nil {
@@ -49,7 +53,7 @@ func (s *AuditService) Log(log AuditLog) error {
 	return err
 }
 
-// Convenience methods for common actions
+// LogLogin logs a user login attempt.
 func (s *AuditService) LogLogin(user *models.User, ip, userAgent string, success bool) {
 	action := "login_success"
 	if !success {
@@ -66,6 +70,7 @@ func (s *AuditService) LogLogin(user *models.User, ip, userAgent string, success
 	})
 }
 
+// LogLogout logs a user logout event.
 func (s *AuditService) LogLogout(user *models.User, ip, userAgent string) {
 	s.Log(AuditLog{
 		UserID:       &user.ID,
@@ -77,6 +82,7 @@ func (s *AuditService) LogLogout(user *models.User, ip, userAgent string) {
 	})
 }
 
+// LogCommandCreate logs the creation of a new command.
 func (s *AuditService) LogCommandCreate(user *models.User, commandID, commandName string, ip, userAgent string) {
 	s.Log(AuditLog{
 		UserID:       &user.ID,
@@ -92,6 +98,7 @@ func (s *AuditService) LogCommandCreate(user *models.User, commandID, commandNam
 	})
 }
 
+// LogCommandUpdate logs command update operations.
 func (s *AuditService) LogCommandUpdate(user *models.User, commandID, commandName string, ip, userAgent string) {
 	s.Log(AuditLog{
 		UserID:       &user.ID,
@@ -107,6 +114,7 @@ func (s *AuditService) LogCommandUpdate(user *models.User, commandID, commandNam
 	})
 }
 
+// LogCommandDelete logs command deletion operations.
 func (s *AuditService) LogCommandDelete(user *models.User, commandID, commandName string, ip, userAgent string) {
 	s.Log(AuditLog{
 		UserID:       &user.ID,
@@ -122,6 +130,7 @@ func (s *AuditService) LogCommandDelete(user *models.User, commandID, commandNam
 	})
 }
 
+// LogCommandExecute logs command execution events.
 func (s *AuditService) LogCommandExecute(username string, userID *int64, commandID, commandName, appName string, ip, userAgent string) {
 	s.Log(AuditLog{
 		UserID:       userID,
@@ -138,8 +147,8 @@ func (s *AuditService) LogCommandExecute(username string, userID *int64, command
 	})
 }
 
+// AuditLogEntry represents an audit log record from the database.
 type AuditLogEntry struct {
-	ID           int64  `json:"id"`
 	UserID       *int64 `json:"user_id"`
 	Username     string `json:"username"`
 	Action       string `json:"action"`
@@ -149,9 +158,10 @@ type AuditLogEntry struct {
 	UserAgent    string `json:"user_agent"`
 	Details      string `json:"details"`
 	CreatedAt    string `json:"created_at"`
+	ID           int64  `json:"id"`
 }
 
-// GetLogs retrieves audit logs with pagination
+// GetLogs retrieves audit logs with pagination.
 func (s *AuditService) GetLogs(limit, offset int) ([]AuditLogEntry, error) {
 	if limit == 0 {
 		limit = 50

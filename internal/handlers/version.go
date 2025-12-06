@@ -4,14 +4,22 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/pandeptwidyaop/http-remote/internal/upgrade"
 	"github.com/pandeptwidyaop/http-remote/internal/version"
 )
 
+// VersionHandler handles version information requests.
 type VersionHandler struct{}
 
+// NewVersionHandler creates a new VersionHandler instance.
 func NewVersionHandler() *VersionHandler {
 	return &VersionHandler{}
+}
+
+// Get returns version information.
+func (h *VersionHandler) Get(c *gin.Context) {
+	c.JSON(http.StatusOK, version.Info())
 }
 
 // CheckUpdate checks if a new version is available
@@ -20,10 +28,12 @@ func (h *VersionHandler) CheckUpdate(c *gin.Context) {
 	release, err := upgrade.CheckLatestVersion()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
-			"current":        version.Version,
-			"latest":         "",
+			"current_version":  version.Version,
+			"latest_version":   "",
 			"update_available": false,
-			"error":          err.Error(),
+			"release_url":      "",
+			"release_notes":    "",
+			"error":            err.Error(),
 		})
 		return
 	}
@@ -31,9 +41,10 @@ func (h *VersionHandler) CheckUpdate(c *gin.Context) {
 	needsUpgrade := upgrade.NeedsUpgrade(release.TagName)
 
 	c.JSON(http.StatusOK, gin.H{
-		"current":          version.Version,
-		"latest":           release.TagName,
+		"current_version":  version.Version,
+		"latest_version":   release.TagName,
 		"update_available": needsUpgrade,
-		"release_name":     release.Name,
+		"release_url":      release.HTMLURL,
+		"release_notes":    release.Body,
 	})
 }

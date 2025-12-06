@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Logger is a middleware that logs HTTP requests.
 func Logger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -28,6 +29,7 @@ func Logger() gin.HandlerFunc {
 	}
 }
 
+// PathPrefix is a middleware that stores the path prefix in the context.
 func PathPrefix(prefix string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Set("path_prefix", prefix)

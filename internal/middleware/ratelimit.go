@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// RateLimiter implements rate limiting using a sliding window algorithm.
 type RateLimiter struct {
 	requests map[string]*clientLimit
 	mu       sync.RWMutex
@@ -16,11 +18,12 @@ type RateLimiter struct {
 }
 
 type clientLimit struct {
-	count      int
 	resetTime  time.Time
 	lastUpdate time.Time
+	count      int
 }
 
+// NewRateLimiter creates a new rate limiter with the specified limits.
 func NewRateLimiter(requestsPerWindow int, window time.Duration) *RateLimiter {
 	rl := &RateLimiter{
 		requests: make(map[string]*clientLimit),
@@ -50,6 +53,7 @@ func (rl *RateLimiter) cleanup() {
 	}
 }
 
+// Middleware returns a Gin middleware handler for rate limiting.
 func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		clientIP := c.ClientIP()
@@ -74,10 +78,10 @@ func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 		// Check if limit exceeded
 		if limit.count >= rl.limit {
 			retryAfter := int(limit.resetTime.Sub(now).Seconds())
-			c.Header("X-RateLimit-Limit", string(rune(rl.limit)))
+			c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", rl.limit))
 			c.Header("X-RateLimit-Remaining", "0")
-			c.Header("X-RateLimit-Reset", string(rune(limit.resetTime.Unix())))
-			c.Header("Retry-After", string(rune(retryAfter)))
+			c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", limit.resetTime.Unix()))
+			c.Header("Retry-After", fmt.Sprintf("%d", retryAfter))
 
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error":       "rate limit exceeded",
@@ -91,9 +95,9 @@ func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 		limit.count++
 		limit.lastUpdate = now
 
-		c.Header("X-RateLimit-Limit", string(rune(rl.limit)))
-		c.Header("X-RateLimit-Remaining", string(rune(rl.limit-limit.count)))
-		c.Header("X-RateLimit-Reset", string(rune(limit.resetTime.Unix())))
+		c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", rl.limit))
+		c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", rl.limit-limit.count))
+		c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", limit.resetTime.Unix()))
 
 		c.Next()
 	}

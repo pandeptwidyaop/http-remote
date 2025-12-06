@@ -4,12 +4,14 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/pandeptwidyaop/http-remote/internal/middleware"
 	"github.com/pandeptwidyaop/http-remote/internal/models"
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 	"github.com/pquerna/otp/totp"
 )
 
+// AuthHandler handles HTTP requests for user authentication.
 type AuthHandler struct {
 	authService  *services.AuthService
 	auditService *services.AuditService
@@ -17,6 +19,7 @@ type AuthHandler struct {
 	secureCookie bool
 }
 
+// NewAuthHandler creates a new AuthHandler instance.
 func NewAuthHandler(authService *services.AuthService, auditService *services.AuditService, pathPrefix string, secureCookie bool) *AuthHandler {
 	return &AuthHandler{
 		authService:  authService,
@@ -26,18 +29,21 @@ func NewAuthHandler(authService *services.AuthService, auditService *services.Au
 	}
 }
 
+// LoginRequest contains user login credentials.
 type LoginRequest struct {
 	Username string `json:"username" form:"username" binding:"required"`
 	Password string `json:"password" form:"password" binding:"required"`
 	TOTPCode string `json:"totp_code,omitempty" form:"totp_code"`
 }
 
+// LoginPage renders the login page.
 func (h *AuthHandler) LoginPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "login.html", gin.H{
 		"PathPrefix": h.pathPrefix,
 	})
 }
 
+// Login handles user authentication.
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 
@@ -60,7 +66,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	user, err := h.authService.GetUserByUsername(req.Username)
 	if err != nil || !h.authService.CheckPassword(req.Password, user.PasswordHash) {
 		// Audit failed login attempt
-		h.auditService.Log(services.AuditLog{
+		_ = h.auditService.Log(services.AuditLog{
 			Username:     req.Username,
 			Action:       "login_failed",
 			ResourceType: "auth",
@@ -92,9 +98,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 				return
 			}
 			c.HTML(http.StatusOK, "login.html", gin.H{
-				"PathPrefix":    h.pathPrefix,
-				"RequiresTOTP":  true,
-				"Username":      req.Username,
+				"PathPrefix":   h.pathPrefix,
+				"RequiresTOTP": true,
+				"Username":     req.Username,
 			})
 			return
 		}
@@ -103,7 +109,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		valid := totp.Validate(req.TOTPCode, user.TOTPSecret)
 		if !valid {
 			// Audit failed 2FA attempt
-			h.auditService.Log(services.AuditLog{
+			_ = h.auditService.Log(services.AuditLog{
 				UserID:       &user.ID,
 				Username:     user.Username,
 				Action:       "2fa_failed",
@@ -117,10 +123,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 				return
 			}
 			c.HTML(http.StatusUnauthorized, "login.html", gin.H{
-				"PathPrefix":    h.pathPrefix,
-				"RequiresTOTP":  true,
-				"Username":      req.Username,
-				"Error":         "Invalid 2FA code",
+				"PathPrefix":   h.pathPrefix,
+				"RequiresTOTP": true,
+				"Username":     req.Username,
+				"Error":        "Invalid 2FA code",
 			})
 			return
 		}
@@ -165,17 +171,19 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.Redirect(http.StatusFound, h.pathPrefix+"/")
 }
 
+// Logout logs out the current user.
 func (h *AuthHandler) Logout(c *gin.Context) {
 	// Get user from context for audit log
 	userVal, exists := c.Get(middleware.UserContextKey)
 	if exists {
-		user := userVal.(*models.User)
-		h.auditService.LogLogout(user, c.ClientIP(), c.GetHeader("User-Agent"))
+		if user, ok := userVal.(*models.User); ok {
+			h.auditService.LogLogout(user, c.ClientIP(), c.GetHeader("User-Agent"))
+		}
 	}
 
-	sessionID, _ := c.Cookie(middleware.SessionCookieName)
-	if sessionID != "" {
-		h.authService.DeleteSession(sessionID)
+	sessionID, err := c.Cookie(middleware.SessionCookieName)
+	if err == nil && sessionID != "" {
+		_ = h.authService.DeleteSession(sessionID)
 	}
 
 	c.SetCookie(middleware.SessionCookieName, "", -1, "/", "", h.secureCookie, true)
@@ -188,6 +196,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	c.Redirect(http.StatusFound, h.pathPrefix+"/login")
 }
 
+// Me returns the current user's information.
 func (h *AuthHandler) Me(c *gin.Context) {
 	user, exists := c.Get(middleware.UserContextKey)
 	if !exists {
@@ -195,7 +204,12 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		return
 	}
 
-	u := user.(*models.User)
+	u, ok := user.(*models.User)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"id":       u.ID,
 		"username": u.Username,

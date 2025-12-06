@@ -1,3 +1,4 @@
+// Package assets provides embedded web templates and static files.
 package assets
 
 import (

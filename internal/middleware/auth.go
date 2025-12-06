@@ -1,17 +1,22 @@
+// Package middleware provides HTTP middleware for authentication, logging, and rate limiting.
 package middleware
 
 import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
 const (
+	// SessionCookieName is the name of the session cookie.
 	SessionCookieName = "session_id"
-	UserContextKey    = "user"
+	// UserContextKey is the key for storing user in request context.
+	UserContextKey = "user"
 )
 
+// AuthRequired is a middleware that requires authentication.
 func AuthRequired(authService *services.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sessionID, err := c.Cookie(SessionCookieName)

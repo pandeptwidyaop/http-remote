@@ -13,13 +13,16 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/pandeptwidyaop/http-remote/internal/config"
 	"github.com/pandeptwidyaop/http-remote/internal/database"
 	"github.com/pandeptwidyaop/http-remote/internal/models"
 )
 
+// ErrExecutionNotFound is returned when a requested execution does not exist.
 var ErrExecutionNotFound = errors.New("execution not found")
 
+// ExecutorService handles command execution and streaming.
 type ExecutorService struct {
 	db         *database.DB
 	cfg        *config.Config
@@ -28,6 +31,7 @@ type ExecutorService struct {
 	streamsMu  sync.RWMutex
 }
 
+// NewExecutorService creates a new ExecutorService instance.
 func NewExecutorService(db *database.DB, cfg *config.Config, appService *AppService) *ExecutorService {
 	return &ExecutorService{
 		db:         db,
@@ -37,6 +41,7 @@ func NewExecutorService(db *database.DB, cfg *config.Config, appService *AppServ
 	}
 }
 
+// CreateExecution creates a new execution record for the given command and user.
 func (s *ExecutorService) CreateExecution(commandID string, userID int64) (*models.Execution, error) {
 	id := uuid.New().String()
 
@@ -51,6 +56,7 @@ func (s *ExecutorService) CreateExecution(commandID string, userID int64) (*mode
 	return s.GetExecutionByID(id)
 }
 
+// GetExecutionByID retrieves a single execution by its ID.
 func (s *ExecutorService) GetExecutionByID(id string) (*models.Execution, error) {
 	var exec models.Execution
 	var output sql.NullString
@@ -86,6 +92,7 @@ func (s *ExecutorService) GetExecutionByID(id string) (*models.Execution, error)
 	return &exec, nil
 }
 
+// GetExecutions retrieves a paginated list of executions with command and app details.
 func (s *ExecutorService) GetExecutions(limit, offset int) ([]models.ExecutionWithDetails, error) {
 	if limit == 0 {
 		limit = 50
@@ -141,6 +148,7 @@ func (s *ExecutorService) GetExecutions(limit, offset int) ([]models.ExecutionWi
 	return executions, nil
 }
 
+// Execute runs a command execution asynchronously and streams output to subscribers.
 func (s *ExecutorService) Execute(executionID string) error {
 	log.Printf("[Executor] Starting execution %s", executionID)
 
@@ -281,6 +289,7 @@ func (s *ExecutorService) finishExecution(id string, status models.ExecutionStat
 	)
 }
 
+// Subscribe creates a new channel to receive execution output for the given execution ID.
 func (s *ExecutorService) Subscribe(executionID string) chan string {
 	ch := make(chan string, 100)
 
@@ -291,6 +300,7 @@ func (s *ExecutorService) Subscribe(executionID string) chan string {
 	return ch
 }
 
+// Unsubscribe removes a channel from receiving execution output and closes it.
 func (s *ExecutorService) Unsubscribe(executionID string, ch chan string) {
 	s.streamsMu.Lock()
 	defer s.streamsMu.Unlock()

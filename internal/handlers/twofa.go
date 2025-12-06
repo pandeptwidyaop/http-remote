@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"image/png"
@@ -238,5 +239,71 @@ func (h *TwoFAHandler) GetStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"enabled": user.TOTPEnabled,
 		"setup":   user.TOTPSecret != "",
+	})
+}
+
+// generateBackupCodes generates 10 random backup codes
+func generateBackupCodes() []string {
+	codes := make([]string, 10)
+	for i := 0; i < 10; i++ {
+		code := make([]byte, 4)
+		_, _ = rand.Read(code)
+		codes[i] = fmt.Sprintf("%08x", code)
+	}
+	return codes
+}
+
+// GetBackupCodes returns the user's backup codes
+func (h *TwoFAHandler) GetBackupCodes(c *gin.Context) {
+	userObj, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	user, ok := userObj.(*models.User)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+		return
+	}
+
+	if !user.TOTPEnabled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "2FA not enabled"})
+		return
+	}
+
+	// TODO: Decrypt backup codes from user.BackupCodes
+	// For now, return placeholder
+	c.JSON(http.StatusOK, gin.H{
+		"codes": []string{}, // Will implement with encryption
+	})
+}
+
+// RegenerateBackupCodes regenerates backup codes for the user
+func (h *TwoFAHandler) RegenerateBackupCodes(c *gin.Context) {
+	userObj, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	user, ok := userObj.(*models.User)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+		return
+	}
+
+	if !user.TOTPEnabled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "2FA not enabled"})
+		return
+	}
+
+	codes := generateBackupCodes()
+
+	// TODO: Encrypt and store backup codes
+	// For now, return generated codes
+	c.JSON(http.StatusOK, gin.H{
+		"codes":   codes,
+		"message": "Backup codes regenerated. Save these codes in a secure location.",
 	})
 }

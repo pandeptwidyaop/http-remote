@@ -18,3 +18,10 @@ execution:
 admin:
   username: "admin"
   password: "admin"
+
+terminal:
+  shell: "/bin/bash"
+  args: ["-l"]
+  env:
+    - "SUDO_ASKPASS=/usr/bin/ssh-askpass"
+  # enabled: true  # Set to false to disable terminal

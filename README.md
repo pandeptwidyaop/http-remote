@@ -10,6 +10,10 @@ Tool DevOps untuk melakukan remote deployment dan eksekusi command pada server p
 
 ## Features
 
+- **Modern React SPA UI** - Built with React 18, TypeScript, and Tailwind CSS
+- **2FA/TOTP Support** - Two-factor authentication with encrypted secret storage (AES-256-GCM)
+- **Backup Codes** - Recovery codes for 2FA with encryption
+- **Remote Terminal** - Interactive WebSocket-based shell access with PTY support
 - **Web UI & REST API** - Dashboard web dan API untuk otomatisasi
 - **App Management** - Kelola multiple aplikasi/project
 - **Command Templates** - Simpan command deployment untuk reuse
@@ -19,11 +23,14 @@ Tool DevOps untuk melakukan remote deployment dan eksekusi command pada server p
 - **UUID Identifiers** - Semua resource menggunakan UUID
 - **SQLite Database** - Portable, tidak perlu database server
 - **Single Binary** - Semua assets (HTML, CSS, JS) embedded dalam satu executable
+- **Audit Logging** - Track all user actions and executions
+- **Rate Limiting** - Protection against brute force attacks
 
 ## Requirements
 
 - Go 1.21+
 - GCC (untuk kompilasi SQLite)
+- Node.js 18+ and npm (for building frontend)
 
 ## Installation
 
@@ -36,7 +43,13 @@ Binary sudah include semua assets (HTML, CSS, JS) - tidak perlu folder `web/` te
 git clone https://github.com/pandeptwidyaop/http-remote.git
 cd http-remote
 
-# Build single binary
+# Build frontend (React SPA)
+cd web
+npm install
+npm run build
+cd ..
+
+# Build single binary (includes embedded frontend assets)
 go build -o http-remote ./cmd/server
 
 # Run dari mana saja (tidak perlu folder web/)
@@ -87,7 +100,91 @@ execution:
 admin:
   username: "admin"
   password: "changeme"  # If left as "changeme", a secure random password will be generated on first run
+
+terminal:
+  shell: "/bin/bash"    # Shell to use (default: /bin/bash)
+  args: ["-l"]          # Shell arguments (default: ["-l"] for login shell)
+  env:                  # Additional environment variables
+    - "SUDO_ASKPASS=/usr/bin/ssh-askpass"
+  # enabled: true       # Set to false to disable terminal feature
 ```
+
+### Nginx Reverse Proxy Configuration
+
+Jika menggunakan Nginx sebagai reverse proxy untuk HTTP Remote:
+
+```nginx
+# /etc/nginx/sites-available/devops.conf
+
+upstream http_remote {
+    server 127.0.0.1:8080;
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    server_name devops.example.com;
+
+    # Redirect HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name devops.example.com;
+
+    # SSL Configuration
+    ssl_certificate /etc/letsencrypt/live/devops.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/devops.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
+    ssl_prefer_server_ciphers off;
+
+    # Security Headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # Proxy settings for /devops path
+    location /devops {
+        proxy_pass http://http_remote;
+        proxy_http_version 1.1;
+
+        # Headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket support (for terminal)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 3600s;  # Long timeout for terminal sessions
+
+        # Buffering (disable for SSE streaming)
+        proxy_buffering off;
+        proxy_cache off;
+    }
+
+    # Health check endpoint (optional)
+    location /devops/api/version {
+        proxy_pass http://http_remote;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        access_log off;
+    }
+}
+```
+
+**Catatan penting:**
+- `proxy_read_timeout 3600s` diperlukan untuk terminal WebSocket yang bisa berjalan lama
+- `proxy_buffering off` penting untuk SSE streaming output
+- `Upgrade` dan `Connection` headers diperlukan untuk WebSocket terminal
+- Gunakan `secure_cookie: true` di config.yaml saat menggunakan HTTPS
 
 ## Quick Start
 
@@ -120,6 +217,21 @@ git pull origin main && docker-compose up -d --build
 ### 4. Execute
 
 Klik "Execute" pada command untuk menjalankannya. Output akan ditampilkan secara real-time.
+
+### 5. Enable Two-Factor Authentication (Optional)
+
+1. Navigate to **Settings** page
+2. Click "Enable 2FA"
+3. Scan QR code with authenticator app (Google Authenticator, Authy, etc.)
+4. Enter 6-digit code to verify
+5. Save backup codes securely for account recovery
+
+### 6. Remote Terminal Access
+
+1. Navigate to **Terminal** page in the navigation menu
+2. Interactive shell session will open automatically
+3. Execute commands directly on the server with real-time output
+4. **Security Warning**: Terminal provides full shell access - use with caution
 
 ---
 
@@ -792,6 +904,13 @@ Jika ingin rotasi log manual, buat `/etc/logrotate.d/http-remote`:
 | GET | `/devops/api/executions` | Session | List executions |
 | GET | `/devops/api/executions/:id` | Session | Get execution |
 | GET | `/devops/api/executions/:id/stream` | Session | Stream output (SSE) |
+| GET | `/devops/api/2fa/status` | Session | Get 2FA status |
+| POST | `/devops/api/2fa/generate-secret` | Session | Generate TOTP secret |
+| GET | `/devops/api/2fa/qrcode` | Session | Get QR code for TOTP setup |
+| POST | `/devops/api/2fa/enable` | Session | Enable 2FA with verification |
+| POST | `/devops/api/2fa/disable` | Session | Disable 2FA |
+| GET | `/devops/api/terminal/ws` | Session | WebSocket terminal connection |
+| GET | `/devops/api/audit-logs` | Session | List audit logs |
 
 ---
 
@@ -805,6 +924,9 @@ HTTP Remote implements multiple security layers to protect your deployment infra
 - **Secure Session Cookies**: HttpOnly flag enabled, Secure flag configurable
 - **Session Regeneration**: Automatic session invalidation on login to prevent session fixation
 - **Auto-generated Passwords**: If default password "changeme" is detected, a secure random password is generated automatically
+- **Two-Factor Authentication (2FA/TOTP)**: Optional TOTP-based 2FA using authenticator apps (Google Authenticator, Authy, etc.)
+- **Encrypted TOTP Secrets**: TOTP secrets encrypted at rest using AES-256-GCM
+- **Backup Codes**: Encrypted recovery codes for 2FA account recovery
 
 ### Rate Limiting
 
@@ -813,6 +935,7 @@ Built-in rate limiting to prevent brute-force attacks:
 - **Login Endpoint**: 5 requests/minute
 - **API Endpoints**: 60 requests/minute
 - **Deploy Endpoint**: 30 requests/minute
+- **2FA Endpoints**: 10 requests/minute (generate, enable, disable)
 
 Rate limit headers included in responses:
 - `X-RateLimit-Limit`: Maximum requests allowed

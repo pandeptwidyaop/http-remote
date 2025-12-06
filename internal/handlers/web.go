@@ -4,18 +4,21 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/pandeptwidyaop/http-remote/internal/middleware"
 	"github.com/pandeptwidyaop/http-remote/internal/models"
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 	"github.com/pandeptwidyaop/http-remote/internal/version"
 )
 
+// WebHandler handles web page rendering.
 type WebHandler struct {
 	appService      *services.AppService
 	executorService *services.ExecutorService
 	pathPrefix      string
 }
 
+// NewWebHandler creates a new WebHandler instance.
 func NewWebHandler(appService *services.AppService, executorService *services.ExecutorService, pathPrefix string) *WebHandler {
 	return &WebHandler{
 		appService:      appService,
@@ -24,9 +27,18 @@ func NewWebHandler(appService *services.AppService, executorService *services.Ex
 	}
 }
 
+// Dashboard renders the dashboard page.
 func (h *WebHandler) Dashboard(c *gin.Context) {
-	user, _ := c.Get(middleware.UserContextKey)
-	u := user.(*models.User)
+	user, exists := c.Get(middleware.UserContextKey)
+	if !exists {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
+	u, ok := user.(*models.User)
+	if !ok {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 
 	apps, _ := h.appService.GetAllApps()
 	executions, _ := h.executorService.GetExecutions(10, 0)
@@ -40,9 +52,18 @@ func (h *WebHandler) Dashboard(c *gin.Context) {
 	})
 }
 
+// AppsPage renders the applications list page.
 func (h *WebHandler) AppsPage(c *gin.Context) {
-	user, _ := c.Get(middleware.UserContextKey)
-	u := user.(*models.User)
+	user, exists := c.Get(middleware.UserContextKey)
+	if !exists {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
+	u, ok := user.(*models.User)
+	if !ok {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 
 	apps, _ := h.appService.GetAllApps()
 
@@ -54,9 +75,18 @@ func (h *WebHandler) AppsPage(c *gin.Context) {
 	})
 }
 
+// AppDetailPage renders the application detail page.
 func (h *WebHandler) AppDetailPage(c *gin.Context) {
-	user, _ := c.Get(middleware.UserContextKey)
-	u := user.(*models.User)
+	user, exists := c.Get(middleware.UserContextKey)
+	if !exists {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
+	u, ok := user.(*models.User)
+	if !ok {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 
 	id := c.Param("id")
 
@@ -77,9 +107,18 @@ func (h *WebHandler) AppDetailPage(c *gin.Context) {
 	})
 }
 
+// ExecutePage renders the command execution page.
 func (h *WebHandler) ExecutePage(c *gin.Context) {
-	user, _ := c.Get(middleware.UserContextKey)
-	u := user.(*models.User)
+	user, exists := c.Get(middleware.UserContextKey)
+	if !exists {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
+	u, ok := user.(*models.User)
+	if !ok {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 
 	id := c.Param("id")
 
@@ -100,9 +139,18 @@ func (h *WebHandler) ExecutePage(c *gin.Context) {
 	})
 }
 
+// ExecutionsPage renders the executions list page.
 func (h *WebHandler) ExecutionsPage(c *gin.Context) {
-	user, _ := c.Get(middleware.UserContextKey)
-	u := user.(*models.User)
+	user, exists := c.Get(middleware.UserContextKey)
+	if !exists {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
+	u, ok := user.(*models.User)
+	if !ok {
+		c.Redirect(http.StatusFound, h.pathPrefix+"/login")
+		return
+	}
 
 	executions, _ := h.executorService.GetExecutions(50, 0)
 

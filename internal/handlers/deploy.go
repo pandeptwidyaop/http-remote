@@ -5,15 +5,18 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
+// DeployHandler handles deployment webhook requests.
 type DeployHandler struct {
 	appService      *services.AppService
 	executorService *services.ExecutorService
 	pathPrefix      string
 }
 
+// NewDeployHandler creates a new DeployHandler instance.
 func NewDeployHandler(appService *services.AppService, executorService *services.ExecutorService, pathPrefix string) *DeployHandler {
 	return &DeployHandler{
 		appService:      appService,
@@ -22,6 +25,7 @@ func NewDeployHandler(appService *services.AppService, executorService *services
 	}
 }
 
+// DeployRequest contains the optional command ID for deployment.
 type DeployRequest struct {
 	CommandID string `json:"command_id"`
 }
@@ -57,7 +61,7 @@ func (h *DeployHandler) Deploy(c *gin.Context) {
 
 	// Get command - either from request body or default
 	var req DeployRequest
-	c.ShouldBindJSON(&req)
+	_ = c.ShouldBindJSON(&req) // Ignore error, req is optional
 
 	var commandID string
 	if req.CommandID != "" {
@@ -90,7 +94,9 @@ func (h *DeployHandler) Deploy(c *gin.Context) {
 	}
 
 	// Execute in background
-	go h.executorService.Execute(execution.ID)
+	go func() {
+		_ = h.executorService.Execute(execution.ID)
+	}()
 
 	c.JSON(http.StatusAccepted, gin.H{
 		"message":      "deployment started",
