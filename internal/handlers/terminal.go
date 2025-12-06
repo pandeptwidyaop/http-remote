@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/creack/pty"
 	"github.com/gin-gonic/gin"
@@ -122,15 +123,20 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 
 	log.Printf("[Terminal] User %s connected", user.Username)
 
-	// Audit log terminal connection
+	// Log terminal session start
+	sessionStart := time.Now()
 	if h.auditService != nil {
 		_ = h.auditService.Log(services.AuditLog{
 			UserID:       &user.ID,
 			Username:     user.Username,
 			Action:       "terminal_connect",
 			ResourceType: "terminal",
+			ResourceID:   "session",
 			IPAddress:    c.ClientIP(),
 			UserAgent:    c.GetHeader("User-Agent"),
+			Details: map[string]interface{}{
+				"shell": h.cfg.Shell,
+			},
 		})
 	}
 
@@ -204,17 +210,23 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 
 cleanup:
 	_ = cmd.Process.Kill()
-	log.Printf("[Terminal] User %s disconnected", user.Username)
 
-	// Audit log terminal disconnect
+	// Log terminal session end with duration
+	sessionDuration := time.Since(sessionStart)
 	if h.auditService != nil {
 		_ = h.auditService.Log(services.AuditLog{
 			UserID:       &user.ID,
 			Username:     user.Username,
 			Action:       "terminal_disconnect",
 			ResourceType: "terminal",
+			ResourceID:   "session",
 			IPAddress:    c.ClientIP(),
 			UserAgent:    c.GetHeader("User-Agent"),
+			Details: map[string]interface{}{
+				"duration_seconds": sessionDuration.Seconds(),
+			},
 		})
 	}
+
+	log.Printf("[Terminal] User %s disconnected (duration: %v)", user.Username, sessionDuration)
 }
