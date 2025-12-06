@@ -27,6 +27,8 @@ var (
 	ErrUserNotFound = errors.New("user not found")
 	// ErrUserExists indicates a user with the same username already exists.
 	ErrUserExists = errors.New("user already exists")
+	// ErrAccountLocked indicates the account is temporarily locked due to too many failed attempts.
+	ErrAccountLocked = errors.New("account temporarily locked")
 )
 
 // AuthService handles user authentication and session management.
@@ -305,4 +307,81 @@ func (s *AuthService) ChangePassword(userID int64, oldPassword, newPassword stri
 	// Update password
 	_, err = s.db.Exec("UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", hashedPassword, userID)
 	return err
+}
+
+// RecordLoginAttempt records a login attempt (success or failure)
+func (s *AuthService) RecordLoginAttempt(username, ipAddress string, success bool) error {
+	_, err := s.db.Exec(
+		"INSERT INTO login_attempts (username, ip_address, success) VALUES (?, ?, ?)",
+		username, ipAddress, success,
+	)
+	return err
+}
+
+// IsAccountLocked checks if an account is locked due to too many failed login attempts
+func (s *AuthService) IsAccountLocked(username string) (bool, time.Duration) {
+	maxAttempts := s.cfg.Security.GetMaxLoginAttempts()
+	lockoutDuration := s.cfg.Security.GetLockoutDuration()
+	windowStart := time.Now().Add(-lockoutDuration)
+
+	// Count failed attempts within the lockout window
+	var failedCount int
+	err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM login_attempts
+		WHERE username = ? AND success = 0 AND created_at > ?
+	`, username, windowStart).Scan(&failedCount)
+
+	if err != nil {
+		return false, 0
+	}
+
+	if failedCount >= maxAttempts {
+		// Get the time of the last failed attempt to calculate remaining lockout time
+		var lastAttemptTime time.Time
+		err := s.db.QueryRow(`
+			SELECT created_at FROM login_attempts
+			WHERE username = ? AND success = 0
+			ORDER BY created_at DESC LIMIT 1
+		`, username).Scan(&lastAttemptTime)
+
+		if err != nil {
+			return true, lockoutDuration
+		}
+
+		unlockTime := lastAttemptTime.Add(lockoutDuration)
+		remaining := time.Until(unlockTime)
+		if remaining > 0 {
+			return true, remaining
+		}
+	}
+
+	return false, 0
+}
+
+// ClearLoginAttempts clears failed login attempts for a user (called after successful login)
+func (s *AuthService) ClearLoginAttempts(username string) error {
+	_, err := s.db.Exec("DELETE FROM login_attempts WHERE username = ?", username)
+	return err
+}
+
+// CleanOldLoginAttempts removes login attempts older than the lockout duration
+func (s *AuthService) CleanOldLoginAttempts() error {
+	lockoutDuration := s.cfg.Security.GetLockoutDuration()
+	cutoff := time.Now().Add(-lockoutDuration * 2) // Keep 2x lockout duration for safety
+	_, err := s.db.Exec("DELETE FROM login_attempts WHERE created_at < ?", cutoff)
+	return err
+}
+
+// GetRecentFailedAttempts returns the count of recent failed login attempts
+func (s *AuthService) GetRecentFailedAttempts(username string) int {
+	lockoutDuration := s.cfg.Security.GetLockoutDuration()
+	windowStart := time.Now().Add(-lockoutDuration)
+
+	var count int
+	_ = s.db.QueryRow(`
+		SELECT COUNT(*) FROM login_attempts
+		WHERE username = ? AND success = 0 AND created_at > ?
+	`, username, windowStart).Scan(&count)
+
+	return count
 }

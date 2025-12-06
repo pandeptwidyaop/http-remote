@@ -184,6 +184,22 @@ func runVersionedMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Migration: Add login_attempts table for account lockout
+	migrationName = "2025_12_06_000003_add_login_attempts"
+	hasRun, err = hasMigrationRun(db, migrationName)
+	if err != nil {
+		return err
+	}
+
+	if !hasRun {
+		if err := addLoginAttemptsTable(db); err != nil {
+			return err
+		}
+		if err := recordMigration(db, migrationName, batch); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -333,6 +349,36 @@ func addAppsUpdatedAtColumn(db *sql.DB) error {
 	}
 
 	return tx.Commit()
+}
+
+// addLoginAttemptsTable creates the login_attempts table for account lockout
+func addLoginAttemptsTable(db *sql.DB) error {
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS login_attempts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			username TEXT NOT NULL,
+			ip_address TEXT NOT NULL,
+			success BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Create indexes for efficient lookups
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_login_attempts_username ON login_attempts(username)`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address)`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_login_attempts_created_at ON login_attempts(created_at)`)
+	return err
 }
 
 // add2FAToUsers adds 2FA fields to users table

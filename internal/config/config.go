@@ -46,7 +46,29 @@ type ServerConfig struct {
 
 // SecurityConfig holds security-related configuration.
 type SecurityConfig struct {
-	EncryptionKey string `yaml:"encryption_key"` // 32-byte key for AES-256-GCM (hex encoded)
+	EncryptionKey    string `yaml:"encryption_key"`     // 32-byte key for AES-256-GCM (hex encoded)
+	MaxLoginAttempts int    `yaml:"max_login_attempts"` // Max failed login attempts before lockout (default: 5)
+	LockoutDuration  string `yaml:"lockout_duration"`   // How long to lock account (default: 15m)
+}
+
+// GetLockoutDuration returns the lockout duration as time.Duration.
+func (c *SecurityConfig) GetLockoutDuration() time.Duration {
+	if c.LockoutDuration == "" {
+		return 15 * time.Minute
+	}
+	d, err := time.ParseDuration(c.LockoutDuration)
+	if err != nil {
+		return 15 * time.Minute
+	}
+	return d
+}
+
+// GetMaxLoginAttempts returns max login attempts (defaults to 5).
+func (c *SecurityConfig) GetMaxLoginAttempts() int {
+	if c.MaxLoginAttempts == 0 {
+		return 5
+	}
+	return c.MaxLoginAttempts
 }
 
 // DatabaseConfig holds database configuration.

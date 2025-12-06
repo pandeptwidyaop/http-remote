@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -10,6 +12,18 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 	"github.com/pquerna/otp/totp"
 )
+
+// formatDuration formats a duration in a human-readable way
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%d seconds", int(d.Seconds()))
+	}
+	minutes := int(d.Minutes())
+	if minutes == 1 {
+		return "1 minute"
+	}
+	return fmt.Sprintf("%d minutes", minutes)
+}
 
 // AuthHandler handles HTTP requests for user authentication.
 type AuthHandler struct {
@@ -62,9 +76,36 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 	}
 
+	// Check if account is locked
+	if locked, remaining := h.authService.IsAccountLocked(req.Username); locked {
+		_ = h.auditService.Log(services.AuditLog{
+			Username:     req.Username,
+			Action:       "login_blocked_locked",
+			ResourceType: "auth",
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+		})
+
+		if c.GetHeader("Content-Type") == "application/json" {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":             "account temporarily locked",
+				"retry_after_seconds": int(remaining.Seconds()),
+			})
+			return
+		}
+		c.HTML(http.StatusTooManyRequests, "login.html", gin.H{
+			"PathPrefix": h.pathPrefix,
+			"Error":      "Account temporarily locked. Please try again in " + formatDuration(remaining),
+		})
+		return
+	}
+
 	// First, verify username and password
 	user, err := h.authService.GetUserByUsername(req.Username)
 	if err != nil || !h.authService.CheckPassword(req.Password, user.PasswordHash) {
+		// Record failed login attempt
+		_ = h.authService.RecordLoginAttempt(req.Username, c.ClientIP(), false)
+
 		// Audit failed login attempt
 		_ = h.auditService.Log(services.AuditLog{
 			Username:     req.Username,
@@ -74,13 +115,30 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			UserAgent:    c.GetHeader("User-Agent"),
 		})
 
+		// Check remaining attempts
+		failedAttempts := h.authService.GetRecentFailedAttempts(req.Username)
+		maxAttempts := 5 // Default
+		remainingAttempts := maxAttempts - failedAttempts
+		if remainingAttempts < 0 {
+			remainingAttempts = 0
+		}
+
 		if c.GetHeader("Content-Type") == "application/json" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+			response := gin.H{"error": "invalid credentials"}
+			if remainingAttempts > 0 && remainingAttempts <= 3 {
+				response["remaining_attempts"] = remainingAttempts
+			}
+			c.JSON(http.StatusUnauthorized, response)
 			return
+		}
+
+		errorMsg := "Invalid username or password"
+		if remainingAttempts > 0 && remainingAttempts <= 3 {
+			errorMsg = fmt.Sprintf("%s. %d attempts remaining", errorMsg, remainingAttempts)
 		}
 		c.HTML(http.StatusUnauthorized, "login.html", gin.H{
 			"PathPrefix": h.pathPrefix,
-			"Error":      "Invalid username or password",
+			"Error":      errorMsg,
 		})
 		return
 	}
@@ -133,6 +191,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	// Create session after successful authentication (including 2FA if enabled)
+	// Clear failed login attempts on successful login
+	_ = h.authService.ClearLoginAttempts(req.Username)
+	_ = h.authService.RecordLoginAttempt(req.Username, c.ClientIP(), true)
+
 	h.authService.InvalidateUserSessions(user.ID)
 	session, err := h.authService.CreateSession(user.ID)
 	if err != nil {
