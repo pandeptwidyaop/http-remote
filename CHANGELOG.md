@@ -1,45 +1,12 @@
-# [2.0.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.6.0...v2.0.0) (2025-12-06)
-
-
-### Features
-
-* **2FA/TOTP Authentication**: Add two-factor authentication with TOTP support using authenticator apps ([2c332c3](https://github.com/pandeptwidyaop/http-remote/commit/2c332c3), [4052ff8](https://github.com/pandeptwidyaop/http-remote/commit/4052ff8))
-  - QR code generation for easy setup
-  - TOTP verification on login
-  - Encrypted secret storage using AES-256-GCM ([43b4565](https://github.com/pandeptwidyaop/http-remote/commit/43b4565))
-* **Backup Codes**: Add encrypted recovery codes for 2FA account recovery ([78d496f](https://github.com/pandeptwidyaop/http-remote/commit/78d496f))
-* **Remote Terminal**: WebSocket-based interactive shell access with PTY support ([8e4cf0c](https://github.com/pandeptwidyaop/http-remote/commit/8e4cf0c))
-  - Real-time terminal emulation using xterm.js
-  - Full shell access for authenticated users
-  - Bi-directional communication via WebSocket
-* **Modern React SPA UI**: Migrated from vanilla JS to React 18 with TypeScript and Tailwind CSS ([2c332c3](https://github.com/pandeptwidyaop/http-remote/commit/2c332c3))
-  - Built with Vite for fast development
-  - Embedded in binary using Go embed ([5c995f2](https://github.com/pandeptwidyaop/http-remote/commit/5c995f2))
-* **Enhanced Rate Limiting**: Add rate limiting for 2FA endpoints (10 req/min) ([3d109e6](https://github.com/pandeptwidyaop/http-remote/commit/3d109e6))
-* **Password Management**: Add change password functionality in Settings
-* **AES-256-GCM Encryption**: Implement encryption service for sensitive data ([43b4565](https://github.com/pandeptwidyaop/http-remote/commit/43b4565))
-
-
-### Documentation
-
-* Update README with v2 features and build instructions ([08d0e78](https://github.com/pandeptwidyaop/http-remote/commit/08d0e78))
-  - Add Node.js requirement for frontend build
-  - Document 2FA setup process
-  - Document remote terminal usage
+## [1.6.1](https://github.com/pandeptwidyaop/http-remote/compare/v1.6.0...v1.6.1) (2025-12-05)
 
 
 ### Bug Fixes
 
-* Clean up terminal handler and fix auth tests ([9623cf2](https://github.com/pandeptwidyaop/http-remote/commit/9623cf2))
-  - Remove unused terminal session tracking
-  - Fix test database schema for 2FA columns
-
-
-### Breaking Changes
-
-* **Frontend**: Migrated from vanilla JS to React SPA - custom modifications to old frontend will need migration
-* **Database Schema**: Added new columns for 2FA support (totp_secret, totp_enabled, backup_codes) - migrations run automatically
-
+* add package comments and improve error handling ([6b01582](https://github.com/pandeptwidyaop/http-remote/commit/6b01582c247a05c5e257b48fc60dbeca1f3dbccb))
+* add type assertion checks in handlers ([e672490](https://github.com/pandeptwidyaop/http-remote/commit/e672490894cb7480cabbeacc6e80ab70b5db23d7))
+* handle error returns in critical paths ([91b019e](https://github.com/pandeptwidyaop/http-remote/commit/91b019ef9995bf62ff619a72d08605bdd1e3e9b4))
+* improve error handling in handlers and fix rate limit headers ([88e408f](https://github.com/pandeptwidyaop/http-remote/commit/88e408fb8c33c3ae2671bb749a952f71655f087d))
 
 # [1.6.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.5.0...v1.6.0) (2025-12-05)
 
