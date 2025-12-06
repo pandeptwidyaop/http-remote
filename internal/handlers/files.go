@@ -13,6 +13,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/pandeptwidyaop/http-remote/internal/config"
+	"github.com/pandeptwidyaop/http-remote/internal/middleware"
+	"github.com/pandeptwidyaop/http-remote/internal/models"
+	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
 // FileInfo represents information about a file or directory
@@ -27,12 +30,37 @@ type FileInfo struct {
 
 // FileHandler handles file operations
 type FileHandler struct {
-	cfg *config.Config
+	cfg          *config.Config
+	auditService *services.AuditService
 }
 
 // NewFileHandler creates a new FileHandler instance
-func NewFileHandler(cfg *config.Config) *FileHandler {
-	return &FileHandler{cfg: cfg}
+func NewFileHandler(cfg *config.Config, auditService *services.AuditService) *FileHandler {
+	return &FileHandler{cfg: cfg, auditService: auditService}
+}
+
+// logFileAction logs a file operation to audit log
+func (h *FileHandler) logFileAction(c *gin.Context, action, path string, details map[string]interface{}) {
+	user, exists := c.Get(middleware.UserContextKey)
+	if !exists {
+		return
+	}
+
+	u, ok := user.(*models.User)
+	if !ok {
+		return
+	}
+
+	h.auditService.Log(services.AuditLog{
+		UserID:       &u.ID,
+		Username:     u.Username,
+		Action:       action,
+		ResourceType: "file",
+		ResourceID:   path,
+		IPAddress:    c.ClientIP(),
+		UserAgent:    c.GetHeader("User-Agent"),
+		Details:      details,
+	})
 }
 
 // ListFiles lists files and directories in a given path
@@ -206,6 +234,12 @@ func (h *FileHandler) DownloadFile(c *gin.Context) {
 		return
 	}
 
+	// Log download action
+	h.logFileAction(c, "download", path, map[string]interface{}{
+		"file_name": info.Name(),
+		"file_size": info.Size(),
+	})
+
 	// Set headers for download
 	c.Header("Content-Description", "File Transfer")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", info.Name()))
@@ -274,6 +308,13 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 	// Get file info after upload
 	uploadedInfo, _ := os.Stat(destPath)
 
+	// Log upload action
+	h.logFileAction(c, "upload", destPath, map[string]interface{}{
+		"file_name":   file.Filename,
+		"file_size":   uploadedInfo.Size(),
+		"target_path": targetPath,
+	})
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "file uploaded successfully",
 		"file": FileInfo{
@@ -341,6 +382,12 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 		}
 	}
 
+	// Log delete action
+	h.logFileAction(c, "delete", path, map[string]interface{}{
+		"is_dir":    info.IsDir(),
+		"recursive": c.Query("recursive") == "true",
+	})
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "deleted successfully",
 		"path":    path,
@@ -373,6 +420,9 @@ func (h *FileHandler) CreateDirectory(c *gin.Context) {
 	}
 
 	info, _ := os.Stat(path)
+
+	// Log mkdir action
+	h.logFileAction(c, "mkdir", path, nil)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "directory created successfully",
@@ -415,6 +465,11 @@ func (h *FileHandler) SaveFile(c *gin.Context) {
 	}
 
 	info, _ := os.Stat(path)
+
+	// Log save action
+	h.logFileAction(c, "save", path, map[string]interface{}{
+		"file_size": info.Size(),
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "file saved successfully",
@@ -474,6 +529,12 @@ func (h *FileHandler) RenameFile(c *gin.Context) {
 	}
 
 	info, _ := os.Stat(newPath)
+
+	// Log rename action
+	h.logFileAction(c, "rename", newPath, map[string]interface{}{
+		"old_path": oldPath,
+		"new_path": newPath,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "renamed successfully",
@@ -561,6 +622,13 @@ func (h *FileHandler) CopyFile(c *gin.Context) {
 	}
 
 	info, _ := os.Stat(destPath)
+
+	// Log copy action
+	h.logFileAction(c, "copy", destPath, map[string]interface{}{
+		"source_path": sourcePath,
+		"dest_path":   destPath,
+		"file_size":   info.Size(),
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":     "file copied successfully",

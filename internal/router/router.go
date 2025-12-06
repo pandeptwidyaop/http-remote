@@ -69,7 +69,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	auditHandler := handlers.NewAuditHandler(auditService, cfg.Server.PathPrefix)
 	versionHandler := handlers.NewVersionHandler()
 	terminalHandler := handlers.NewTerminalHandler(&cfg.Terminal)
-	fileHandler := handlers.NewFileHandler(cfg)
+	fileHandler := handlers.NewFileHandler(cfg, auditService)
 
 	// Rate limiters
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)   // 5 req/min for login
