@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.8.0...v1.9.0) (2025-12-06)
+
+
+### Features
+
+* add version display and update notification in web UI ([5276304](https://github.com/pandeptwidyaop/http-remote/commit/527630499e6245905efe4bf2f6f108228b3dccb5))
+
 # [1.8.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.7.0...v1.8.0) (2025-12-06)
 
 
