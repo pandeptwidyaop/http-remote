@@ -17,4 +17,4 @@ execution:
 
 admin:
   username: "admin"
-  password: "changeme"
+  password: "admin"
