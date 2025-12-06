@@ -1,3 +1,17 @@
+# [1.12.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.11.0...v1.12.0) (2025-12-06)
+
+
+### Features
+
+* add 2FA backup codes, password history, and app backup/export ([36e4586](https://github.com/pandeptwidyaop/http-remote/commit/36e45866c98c79cc9f814e6dbf9ab4448cb235a7))
+* add audit logging for file management operations ([ef55270](https://github.com/pandeptwidyaop/http-remote/commit/ef552701e949583e4467542493974601f1becd11))
+* add file browser with upload/download capabilities ([ce791f6](https://github.com/pandeptwidyaop/http-remote/commit/ce791f68ea6838ff8c1f939dec2f759a2e6f1502))
+* add multiple terminal sessions and recording ([116dac6](https://github.com/pandeptwidyaop/http-remote/commit/116dac619f397dcf766c5bede2c2bdcd747c3935))
+* add multiple terminal sessions with audit logging ([622813a](https://github.com/pandeptwidyaop/http-remote/commit/622813a93469d415cd8d393494ab6b0f32c13119))
+* add password complexity, input sanitization, and request size limits ([a599ffd](https://github.com/pandeptwidyaop/http-remote/commit/a599ffd9f241558ba17fff2b9abff00ed4bd2d85))
+* add persistent terminal sessions, protect default admin, and support root path_prefix ([df410a3](https://github.com/pandeptwidyaop/http-remote/commit/df410a347c922ebcb218f4b9ac0fb052d6534657))
+* add user management with role-based access control ([00eee08](https://github.com/pandeptwidyaop/http-remote/commit/00eee082e9e722e69e59e7e3501fd7c8fb82b314))
+
 # [1.11.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.10.0...v1.11.0) (2025-12-06)
 
 
