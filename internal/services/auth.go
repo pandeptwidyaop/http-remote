@@ -31,6 +31,13 @@ var (
 	ErrUserExists = errors.New("user already exists")
 	// ErrAccountLocked indicates the account is temporarily locked due to too many failed attempts.
 	ErrAccountLocked = errors.New("account temporarily locked")
+	// ErrPasswordReused indicates the password was used recently
+	ErrPasswordReused = errors.New("password was used recently, please choose a different password")
+)
+
+// Password History constants
+const (
+	PasswordHistoryLimit = 5 // Number of previous passwords to remember
 )
 
 // AuthService handles user authentication and session management.
@@ -59,14 +66,25 @@ func (s *AuthService) CheckPassword(password, hash string) bool {
 
 // CreateUser creates a new user with a hashed password.
 func (s *AuthService) CreateUser(username, password string, isAdmin bool) (*models.User, error) {
+	role := models.RoleOperator
+	if isAdmin {
+		role = models.RoleAdmin
+	}
+	return s.CreateUserWithRole(username, password, role)
+}
+
+// CreateUserWithRole creates a new user with a specific role.
+func (s *AuthService) CreateUserWithRole(username, password string, role models.UserRole) (*models.User, error) {
 	hash, err := s.HashPassword(password)
 	if err != nil {
 		return nil, err
 	}
 
+	isAdmin := role == models.RoleAdmin
+
 	result, err := s.db.Exec(
-		"INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?)",
-		username, hash, isAdmin,
+		"INSERT INTO users (username, password_hash, is_admin, role) VALUES (?, ?, ?, ?)",
+		username, hash, isAdmin, string(role),
 	)
 	if err != nil {
 		return nil, ErrUserExists
@@ -82,11 +100,12 @@ func (s *AuthService) GetUserByID(id int64) (*models.User, error) {
 	var totpSecret sql.NullString
 	var totpEnabled sql.NullBool
 	var backupCodes sql.NullString
+	var role sql.NullString
 
 	err := s.db.QueryRow(
-		"SELECT id, username, password_hash, is_admin, COALESCE(totp_secret, ''), COALESCE(totp_enabled, 0), COALESCE(backup_codes, ''), created_at, updated_at FROM users WHERE id = ?",
+		"SELECT id, username, password_hash, is_admin, COALESCE(totp_secret, ''), COALESCE(totp_enabled, 0), COALESCE(backup_codes, ''), COALESCE(role, 'operator'), created_at, updated_at FROM users WHERE id = ?",
 		id,
-	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &totpSecret, &totpEnabled, &backupCodes, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &totpSecret, &totpEnabled, &backupCodes, &role, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, ErrUserNotFound
@@ -110,6 +129,15 @@ func (s *AuthService) GetUserByID(id int64) (*models.User, error) {
 
 	user.TOTPEnabled = totpEnabled.Bool
 	user.BackupCodes = backupCodes.String
+	user.Role = models.UserRole(role.String)
+	// For backward compatibility
+	if user.Role == "" {
+		if user.IsAdmin {
+			user.Role = models.RoleAdmin
+		} else {
+			user.Role = models.RoleOperator
+		}
+	}
 	return &user, nil
 }
 
@@ -119,11 +147,12 @@ func (s *AuthService) GetUserByUsername(username string) (*models.User, error) {
 	var totpSecret sql.NullString
 	var totpEnabled sql.NullBool
 	var backupCodes sql.NullString
+	var role sql.NullString
 
 	err := s.db.QueryRow(
-		"SELECT id, username, password_hash, is_admin, COALESCE(totp_secret, ''), COALESCE(totp_enabled, 0), COALESCE(backup_codes, ''), created_at, updated_at FROM users WHERE username = ?",
+		"SELECT id, username, password_hash, is_admin, COALESCE(totp_secret, ''), COALESCE(totp_enabled, 0), COALESCE(backup_codes, ''), COALESCE(role, 'operator'), created_at, updated_at FROM users WHERE username = ?",
 		username,
-	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &totpSecret, &totpEnabled, &backupCodes, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &totpSecret, &totpEnabled, &backupCodes, &role, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, ErrUserNotFound
@@ -147,6 +176,15 @@ func (s *AuthService) GetUserByUsername(username string) (*models.User, error) {
 
 	user.TOTPEnabled = totpEnabled.Bool
 	user.BackupCodes = backupCodes.String
+	user.Role = models.UserRole(role.String)
+	// For backward compatibility
+	if user.Role == "" {
+		if user.IsAdmin {
+			user.Role = models.RoleAdmin
+		} else {
+			user.Role = models.RoleOperator
+		}
+	}
 	return &user, nil
 }
 
@@ -607,14 +645,6 @@ func splitNonEmpty(s, sep string) []string {
 	return parts
 }
 
-// Password History constants
-const (
-	PasswordHistoryLimit = 5 // Number of previous passwords to remember
-)
-
-// ErrPasswordReused indicates the password was used recently
-var ErrPasswordReused = errors.New("password was used recently, please choose a different password")
-
 // AddPasswordToHistory adds a password hash to the user's password history
 func (s *AuthService) AddPasswordToHistory(userID int64, passwordHash string) error {
 	_, err := s.db.Exec(
@@ -664,4 +694,100 @@ func (s *AuthService) IsPasswordInHistory(userID int64, password string) (bool, 
 	}
 
 	return false, nil
+}
+
+// GetAllUsers retrieves all users with pagination.
+func (s *AuthService) GetAllUsers(limit, offset int) ([]*models.User, int, error) {
+	// Get total count
+	var total int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := s.db.Query(
+		"SELECT id, username, is_admin, COALESCE(role, 'operator'), COALESCE(totp_enabled, 0), created_at, updated_at FROM users ORDER BY id ASC LIMIT ? OFFSET ?",
+		limit, offset,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var users []*models.User
+	for rows.Next() {
+		var user models.User
+		var role sql.NullString
+		var totpEnabled sql.NullBool
+
+		err := rows.Scan(&user.ID, &user.Username, &user.IsAdmin, &role, &totpEnabled, &user.CreatedAt, &user.UpdatedAt)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		user.Role = models.UserRole(role.String)
+		user.TOTPEnabled = totpEnabled.Bool
+		// For backward compatibility
+		if user.Role == "" {
+			if user.IsAdmin {
+				user.Role = models.RoleAdmin
+			} else {
+				user.Role = models.RoleOperator
+			}
+		}
+		users = append(users, &user)
+	}
+
+	return users, total, nil
+}
+
+// UpdateUser updates a user's information.
+func (s *AuthService) UpdateUser(userID int64, username string, role models.UserRole) error {
+	isAdmin := role == models.RoleAdmin
+
+	_, err := s.db.Exec(
+		"UPDATE users SET username = ?, role = ?, is_admin = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+		username, string(role), isAdmin, userID,
+	)
+	return err
+}
+
+// UpdateUserPassword updates a user's password (admin action, no old password required).
+func (s *AuthService) UpdateUserPassword(userID int64, newPassword string) error {
+	hashedPassword, err := s.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Exec("UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", hashedPassword, userID)
+	return err
+}
+
+// DeleteUser deletes a user by ID.
+func (s *AuthService) DeleteUser(userID int64) error {
+	// First delete all sessions for this user
+	_, err := s.db.Exec("DELETE FROM sessions WHERE user_id = ?", userID)
+	if err != nil {
+		return err
+	}
+
+	// Then delete the user
+	result, err := s.db.Exec("DELETE FROM users WHERE id = ?", userID)
+	if err != nil {
+		return err
+	}
+
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return ErrUserNotFound
+	}
+
+	return nil
+}
+
+// CountAdminUsers counts the number of admin users.
+func (s *AuthService) CountAdminUsers() (int, error) {
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin' OR is_admin = 1").Scan(&count)
+	return count, err
 }

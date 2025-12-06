@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/pandeptwidyaop/http-remote/internal/models"
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
@@ -73,4 +74,41 @@ func redirectToLogin(c *gin.Context) {
 	pathPrefix := c.GetString("path_prefix")
 	c.Redirect(http.StatusFound, pathPrefix+"/login")
 	c.Abort()
+}
+
+// RequireRole is a middleware that requires a specific role.
+func RequireRole(requiredRole models.UserRole) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userObj, exists := c.Get(UserContextKey)
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			c.Abort()
+			return
+		}
+
+		user, ok := userObj.(*models.User)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+			c.Abort()
+			return
+		}
+
+		if !user.HasPermission(requiredRole) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "permission denied"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// RequireAdmin is a middleware that requires admin role.
+func RequireAdmin() gin.HandlerFunc {
+	return RequireRole(models.RoleAdmin)
+}
+
+// RequireOperator is a middleware that requires operator role or higher.
+func RequireOperator() gin.HandlerFunc {
+	return RequireRole(models.RoleOperator)
 }

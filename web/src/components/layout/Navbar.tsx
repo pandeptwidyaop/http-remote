@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Package, History, FileText, Settings, Terminal, X, ArrowUpCircle, FolderOpen } from 'lucide-react';
+import { LogOut, LayoutDashboard, Package, History, FileText, Settings, Terminal, X, ArrowUpCircle, FolderOpen, Users } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useVersionStore } from '@/store/versionStore';
 import Button from '@/components/ui/Button';
@@ -19,6 +19,8 @@ export default function Navbar() {
     await logout();
   };
 
+  const isAdmin = user?.role === 'admin' || user?.is_admin;
+
   const navLinks = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/apps', label: 'Apps', icon: Package },
@@ -26,6 +28,7 @@ export default function Navbar() {
     { path: '/terminal', label: 'Terminal', icon: Terminal },
     { path: '/files', label: 'Files', icon: FolderOpen },
     { path: '/audit-logs', label: 'Audit Logs', icon: FileText },
+    ...(isAdmin ? [{ path: '/users', label: 'Users', icon: Users }] : []),
     { path: '/settings', label: 'Settings', icon: Settings },
   ];
 
