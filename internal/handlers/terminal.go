@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 
+	"github.com/pandeptwidyaop/http-remote/internal/config"
 	"github.com/pandeptwidyaop/http-remote/internal/middleware"
 	"github.com/pandeptwidyaop/http-remote/internal/models"
 )
@@ -25,15 +26,22 @@ var upgrader = websocket.Upgrader{
 
 // TerminalHandler handles interactive terminal sessions over WebSocket.
 type TerminalHandler struct {
+	cfg *config.TerminalConfig
 }
 
 // NewTerminalHandler creates a new TerminalHandler instance.
-func NewTerminalHandler() *TerminalHandler {
-	return &TerminalHandler{}
+func NewTerminalHandler(cfg *config.TerminalConfig) *TerminalHandler {
+	return &TerminalHandler{cfg: cfg}
 }
 
 // HandleWebSocket handles WebSocket terminal connections.
 func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
+	// Check if terminal is enabled
+	if !h.cfg.IsEnabled() {
+		c.JSON(403, gin.H{"error": "terminal is disabled"})
+		return
+	}
+
 	// Verify authentication
 	userObj, exists := c.Get(middleware.UserContextKey)
 	if !exists {
@@ -57,9 +65,13 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 
 	log.Printf("[Terminal] User %s connected", user.Username)
 
-	// Start shell with PTY
-	cmd := exec.Command("/bin/bash", "-l")
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	// Start shell with PTY using config
+	cmd := exec.Command(h.cfg.Shell, h.cfg.Args...)
+
+	// Build environment variables
+	env := append(os.Environ(), "TERM=xterm-256color")
+	env = append(env, h.cfg.Env...)
+	cmd.Env = env
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {

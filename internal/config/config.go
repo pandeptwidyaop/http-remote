@@ -15,6 +15,23 @@ type Config struct {
 	Server    ServerConfig    `yaml:"server"`
 	Auth      AuthConfig      `yaml:"auth"`
 	Execution ExecutionConfig `yaml:"execution"`
+	Terminal  TerminalConfig  `yaml:"terminal"`
+}
+
+// TerminalConfig holds terminal/PTY configuration.
+type TerminalConfig struct {
+	Shell   string   `yaml:"shell"`   // Shell to use (default: /bin/bash)
+	Args    []string `yaml:"args"`    // Shell arguments (default: ["-l"])
+	Env     []string `yaml:"env"`     // Additional environment variables
+	Enabled *bool    `yaml:"enabled"` // Enable terminal feature (default: true)
+}
+
+// IsEnabled returns whether terminal is enabled (defaults to true).
+func (c *TerminalConfig) IsEnabled() bool {
+	if c.Enabled == nil {
+		return true
+	}
+	return *c.Enabled
 }
 
 // ServerConfig holds HTTP server configuration.
@@ -108,5 +125,12 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Admin.Password == "" {
 		cfg.Admin.Password = "changeme"
+	}
+	// Terminal defaults
+	if cfg.Terminal.Shell == "" {
+		cfg.Terminal.Shell = "/bin/bash"
+	}
+	if len(cfg.Terminal.Args) == 0 {
+		cfg.Terminal.Args = []string{"-l"}
 	}
 }
