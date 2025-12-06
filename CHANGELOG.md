@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.7.0...v1.8.0) (2025-12-06)
+
+
+### Features
+
+* add terminal configuration options ([95ca81f](https://github.com/pandeptwidyaop/http-remote/commit/95ca81fc37d80be1609f8a86b75fd6b600ce89f8))
+
 # [1.7.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.6.1...v1.7.0) (2025-12-06)
 
 
