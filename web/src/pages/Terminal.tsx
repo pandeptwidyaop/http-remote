@@ -1,20 +1,35 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { Maximize2, Minimize2, Plus, X, Circle } from 'lucide-react';
+import { Maximize2, Minimize2, Plus, X, Circle, Settings, RefreshCw, Trash2 } from 'lucide-react';
 import '@xterm/xterm/css/xterm.css';
+import { api } from '@/api/client';
+import { getPathPrefix } from '@/lib/config';
+
+interface ServerSession {
+  id: string;
+  name: string;
+  created_at: string;
+  last_activity: string;
+  client_count: number;
+  is_active: boolean;
+}
 
 interface TerminalSession {
   id: string;
   name: string;
+  serverId: string | null; // null for ephemeral sessions
   xterm: XTerm | null;
   ws: WebSocket | null;
   fitAddon: FitAddon | null;
   isConnected: boolean;
+  isPersistent: boolean;
 }
 
+const PERSISTENT_MODE_KEY = 'terminal_persistent_mode';
+
 function generateSessionId(): string {
-  return `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
 function Terminal() {
@@ -24,27 +39,52 @@ function Terminal() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sessionCounter, setSessionCounter] = useState(1);
+  const [persistentMode, setPersistentMode] = useState(() => {
+    return localStorage.getItem(PERSISTENT_MODE_KEY) === 'true';
+  });
+  const [showSettings, setShowSettings] = useState(false);
+  const [serverSessions, setServerSessions] = useState<ServerSession[]>([]);
+  const [loadingServerSessions, setLoadingServerSessions] = useState(false);
+
+  // Fetch server-side sessions
+  const fetchServerSessions = useCallback(async () => {
+    if (!persistentMode) return;
+
+    setLoadingServerSessions(true);
+    try {
+      const response = await api.get<{ sessions: ServerSession[] }>('/api/terminal/sessions');
+      setServerSessions(response.sessions || []);
+    } catch (error) {
+      console.error('Failed to fetch server sessions:', error);
+    } finally {
+      setLoadingServerSessions(false);
+    }
+  }, [persistentMode]);
 
   // Create a new terminal session
-  const createSession = useCallback(() => {
+  const createSession = useCallback((serverSessionId?: string) => {
     const sessionId = generateSessionId();
-    const sessionName = `Terminal ${sessionCounter}`;
+    const sessionName = serverSessionId
+      ? `Persistent ${sessionCounter}`
+      : `Terminal ${sessionCounter}`;
     setSessionCounter((prev) => prev + 1);
 
     const newSession: TerminalSession = {
       id: sessionId,
       name: sessionName,
+      serverId: serverSessionId || null,
       xterm: null,
       ws: null,
       fitAddon: null,
       isConnected: false,
+      isPersistent: persistentMode,
     };
 
     setSessions((prev) => [...prev, newSession]);
     setActiveSessionId(sessionId);
 
     return sessionId;
-  }, [sessionCounter]);
+  }, [sessionCounter, persistentMode]);
 
   // Initialize terminal for a session
   const initializeTerminal = useCallback((sessionId: string, container: HTMLDivElement) => {
@@ -72,15 +112,28 @@ function Terminal() {
     xterm.open(container);
     fitAddon.fit();
 
-    // Connect to WebSocket
-    const pathPrefix = window.location.pathname.split('/').slice(0, 2).join('/') || '';
+    // Build WebSocket URL with persistent mode parameters
+    const pathPrefix = getPathPrefix();
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}${pathPrefix}/api/terminal/ws`;
+    let wsUrl = `${protocol}//${window.location.host}${pathPrefix}/api/terminal/ws`;
+
+    const params = new URLSearchParams();
+    if (session.isPersistent) {
+      params.set('persistent', 'true');
+      if (session.serverId) {
+        params.set('session_id', session.serverId);
+      }
+    }
+
+    if (params.toString()) {
+      wsUrl += `?${params.toString()}`;
+    }
 
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      xterm.writeln('\x1b[1;32mConnected to remote terminal\x1b[0m\r\n');
+      const modeText = session.isPersistent ? 'persistent' : 'ephemeral';
+      xterm.writeln(`\x1b[1;32mConnected to remote terminal (${modeText} mode)\x1b[0m\r\n`);
       setSessions((prev) =>
         prev.map((s) => (s.id === sessionId ? { ...s, isConnected: true } : s))
       );
@@ -88,7 +141,26 @@ function Terminal() {
 
     ws.onmessage = (event) => {
       const handleData = (data: string) => {
-        xterm.write(data);
+        // Check if it's a session info message
+        if (data.startsWith('{"type":"session_info"')) {
+          try {
+            const info = JSON.parse(data);
+            if (info.session && info.session.id) {
+              setSessions((prev) =>
+                prev.map((s) =>
+                  s.id === sessionId
+                    ? { ...s, serverId: info.session.id, name: info.session.name || s.name }
+                    : s
+                )
+              );
+            }
+          } catch {
+            // Not JSON, treat as terminal output
+            xterm.write(data);
+          }
+        } else {
+          xterm.write(data);
+        }
       };
 
       if (event.data instanceof Blob) {
@@ -106,7 +178,13 @@ function Terminal() {
     };
 
     ws.onclose = () => {
-      xterm.writeln('\r\n\x1b[1;33mConnection closed\x1b[0m\r\n');
+      const session = sessions.find((s) => s.id === sessionId);
+      if (session?.isPersistent) {
+        xterm.writeln('\r\n\x1b[1;33mConnection closed. Session is still running on server.\x1b[0m');
+        xterm.writeln('\x1b[1;33mReconnect to resume.\x1b[0m\r\n');
+      } else {
+        xterm.writeln('\r\n\x1b[1;33mConnection closed\x1b[0m\r\n');
+      }
       setSessions((prev) =>
         prev.map((s) => (s.id === sessionId ? { ...s, isConnected: false } : s))
       );
@@ -127,18 +205,94 @@ function Terminal() {
     );
   }, [sessions]);
 
+  // Reconnect to a server session
+  const reconnectSession = useCallback((sessionId: string) => {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session || !session.serverId) return;
+
+    // Close existing WebSocket if any
+    if (session.ws) {
+      session.ws.close();
+    }
+
+    // Clear terminal
+    if (session.xterm) {
+      session.xterm.clear();
+      session.xterm.writeln('\x1b[1;36mReconnecting to session...\x1b[0m\r\n');
+    }
+
+    // Reinitialize with same session
+    const container = terminalRefs.current.get(sessionId);
+    if (container && session.xterm) {
+      const pathPrefix = getPathPrefix();
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}${pathPrefix}/api/terminal/ws?persistent=true&session_id=${session.serverId}`;
+
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        session.xterm?.writeln('\x1b[1;32mReconnected!\x1b[0m\r\n');
+        setSessions((prev) =>
+          prev.map((s) => (s.id === sessionId ? { ...s, ws, isConnected: true } : s))
+        );
+      };
+
+      ws.onmessage = (event) => {
+        if (event.data instanceof Blob) {
+          event.data.arrayBuffer().then((buffer) => {
+            const decoder = new TextDecoder();
+            session.xterm?.write(decoder.decode(buffer));
+          });
+        } else {
+          if (!event.data.startsWith('{"type":"session_info"')) {
+            session.xterm?.write(event.data);
+          }
+        }
+      };
+
+      ws.onerror = () => {
+        session.xterm?.writeln('\r\n\x1b[1;31mReconnection failed\x1b[0m\r\n');
+      };
+
+      ws.onclose = () => {
+        session.xterm?.writeln('\r\n\x1b[1;33mConnection closed\x1b[0m\r\n');
+        setSessions((prev) =>
+          prev.map((s) => (s.id === sessionId ? { ...s, isConnected: false } : s))
+        );
+      };
+
+      session.xterm.onData((data) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(data);
+        }
+      });
+
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, ws } : s))
+      );
+    }
+  }, [sessions]);
+
   // Close a terminal session
-  const closeSession = useCallback((sessionId: string) => {
+  const closeSession = useCallback(async (sessionId: string, deleteOnServer = false) => {
     const session = sessions.find((s) => s.id === sessionId);
     if (session) {
       session.ws?.close();
       session.xterm?.dispose();
+
+      // Delete persistent session on server if requested
+      if (deleteOnServer && session.serverId && session.isPersistent) {
+        try {
+          await api.delete(`/api/terminal/sessions/${session.serverId}`);
+        } catch (error) {
+          console.error('Failed to delete server session:', error);
+        }
+      }
     }
 
     setSessions((prev) => {
       const newSessions = prev.filter((s) => s.id !== sessionId);
 
-      // If closing active session, switch to another
       if (activeSessionId === sessionId && newSessions.length > 0) {
         setActiveSessionId(newSessions[newSessions.length - 1].id);
       } else if (newSessions.length === 0) {
@@ -151,12 +305,53 @@ function Terminal() {
     terminalRefs.current.delete(sessionId);
   }, [sessions, activeSessionId]);
 
+  // Attach to existing server session
+  const attachToServerSession = useCallback((serverSession: ServerSession) => {
+    // Check if already attached
+    const existing = sessions.find((s) => s.serverId === serverSession.id);
+    if (existing) {
+      setActiveSessionId(existing.id);
+      return;
+    }
+
+    const sessionId = generateSessionId();
+    const newSession: TerminalSession = {
+      id: sessionId,
+      name: serverSession.name,
+      serverId: serverSession.id,
+      xterm: null,
+      ws: null,
+      fitAddon: null,
+      isConnected: false,
+      isPersistent: true,
+    };
+
+    setSessions((prev) => [...prev, newSession]);
+    setActiveSessionId(sessionId);
+  }, [sessions]);
+
+  // Toggle persistent mode
+  const togglePersistentMode = useCallback((enabled: boolean) => {
+    setPersistentMode(enabled);
+    localStorage.setItem(PERSISTENT_MODE_KEY, enabled ? 'true' : 'false');
+    if (enabled) {
+      fetchServerSessions();
+    }
+  }, [fetchServerSessions]);
+
   // Create first session on mount
   useEffect(() => {
     if (sessions.length === 0) {
       createSession();
     }
   }, []);
+
+  // Fetch server sessions when persistent mode is enabled
+  useEffect(() => {
+    if (persistentMode) {
+      fetchServerSessions();
+    }
+  }, [persistentMode, fetchServerSessions]);
 
   // Initialize terminal when container is available
   useEffect(() => {
@@ -188,7 +383,6 @@ function Terminal() {
       const isNowFullscreen = !!document.fullscreenElement;
       setIsFullscreen(isNowFullscreen);
 
-      // Delay fit to allow DOM to update
       setTimeout(() => {
         const session = sessions.find((s) => s.id === activeSessionId);
         if (session?.fitAddon) {
@@ -234,11 +428,125 @@ function Terminal() {
   return (
     <div className={`${isFullscreen ? '' : 'space-y-6'}`}>
       {!isFullscreen && (
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Remote Terminal</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Interactive shell access to the server. Open multiple sessions with tabs.
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Remote Terminal</h1>
+            <p className="mt-1 text-sm text-gray-600">
+              Interactive shell access to the server.
+              {persistentMode && ' Sessions persist even when you navigate away.'}
+            </p>
+          </div>
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className={`p-2 rounded-md transition-colors ${
+              showSettings ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'
+            }`}
+            title="Terminal Settings"
+          >
+            <Settings className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+
+      {/* Settings Panel */}
+      {showSettings && !isFullscreen && (
+        <div className="bg-white shadow rounded-lg p-4 space-y-4">
+          <h3 className="text-lg font-medium text-gray-900">Terminal Settings</h3>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="text-sm font-medium text-gray-700">Persistent Sessions</label>
+              <p className="text-xs text-gray-500">
+                Keep terminal sessions running when you navigate away or logout
+              </p>
+            </div>
+            <button
+              onClick={() => togglePersistentMode(!persistentMode)}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                persistentMode ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  persistentMode ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Server Sessions List */}
+          {persistentMode && (
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium text-gray-700">Active Server Sessions</h4>
+                <button
+                  onClick={fetchServerSessions}
+                  disabled={loadingServerSessions}
+                  className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                  title="Refresh"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loadingServerSessions ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+
+              {serverSessions.length === 0 ? (
+                <p className="text-sm text-gray-500">No active server sessions</p>
+              ) : (
+                <div className="space-y-2">
+                  {serverSessions.map((serverSession) => {
+                    const isAttached = sessions.some((s) => s.serverId === serverSession.id);
+                    return (
+                      <div
+                        key={serverSession.id}
+                        className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Circle
+                            className={`h-2 w-2 ${
+                              serverSession.is_active ? 'text-green-500 fill-green-500' : 'text-gray-400 fill-gray-400'
+                            }`}
+                          />
+                          <span className="text-sm font-medium">{serverSession.name}</span>
+                          <span className="text-xs text-gray-500">
+                            ({serverSession.client_count} clients)
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {!isAttached && (
+                            <button
+                              onClick={() => attachToServerSession(serverSession)}
+                              className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                            >
+                              Attach
+                            </button>
+                          )}
+                          <button
+                            onClick={async () => {
+                              try {
+                                await api.delete(`/api/terminal/sessions/${serverSession.id}`);
+                                fetchServerSessions();
+                                // Close local session if attached
+                                const localSession = sessions.find((s) => s.serverId === serverSession.id);
+                                if (localSession) {
+                                  closeSession(localSession.id, false);
+                                }
+                              } catch (error) {
+                                console.error('Failed to delete session:', error);
+                              }
+                            }}
+                            className="p-1 text-red-500 hover:text-red-700"
+                            title="Delete session"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -270,19 +578,39 @@ function Terminal() {
                     session.isConnected ? 'text-green-500 fill-green-500' : 'text-red-500 fill-red-500'
                   }`}
                 />
-                <span className="text-sm font-medium whitespace-nowrap">{session.name}</span>
+                <span className="text-sm font-medium whitespace-nowrap">
+                  {session.name}
+                  {session.isPersistent && (
+                    <span className="ml-1 text-xs opacity-50">(P)</span>
+                  )}
+                </span>
+
+                {/* Reconnect button for disconnected persistent sessions */}
+                {!session.isConnected && session.isPersistent && session.serverId && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      reconnectSession(session.id);
+                    }}
+                    className={`p-0.5 rounded transition-opacity ${
+                      isFullscreen ? 'hover:bg-gray-600' : 'hover:bg-gray-300'
+                    }`}
+                    title="Reconnect"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                  </button>
+                )}
+
                 {sessions.length > 1 && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      closeSession(session.id);
+                      closeSession(session.id, true);
                     }}
                     className={`p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
-                      isFullscreen
-                        ? 'hover:bg-gray-600'
-                        : 'hover:bg-gray-300'
+                      isFullscreen ? 'hover:bg-gray-600' : 'hover:bg-gray-300'
                     }`}
-                    title="Close session"
+                    title={session.isPersistent ? 'Close and delete session' : 'Close session'}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -292,13 +620,13 @@ function Terminal() {
 
             {/* New Tab Button */}
             <button
-              onClick={createSession}
+              onClick={() => createSession()}
               className={`flex items-center gap-1 px-3 py-2 transition-colors ${
                 isFullscreen
                   ? 'text-gray-400 hover:text-white hover:bg-gray-700'
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
               }`}
-              title="New terminal session"
+              title={persistentMode ? 'New persistent session' : 'New terminal session'}
             >
               <Plus className="h-4 w-4" />
             </button>
@@ -307,13 +635,22 @@ function Terminal() {
           {/* Right side controls */}
           <div className={`flex items-center gap-2 px-3 ${isFullscreen ? 'border-l border-gray-700' : 'border-l border-gray-200'}`}>
             {activeSession && (
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                activeSession.isConnected
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {activeSession.isConnected ? 'Connected' : 'Disconnected'}
-              </span>
+              <>
+                {activeSession.isPersistent && (
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                    isFullscreen ? 'bg-blue-900 text-blue-200' : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    Persistent
+                  </span>
+                )}
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                  activeSession.isConnected
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {activeSession.isConnected ? 'Connected' : 'Disconnected'}
+                </span>
+              </>
             )}
             <button
               onClick={toggleFullscreen}
@@ -357,7 +694,7 @@ function Terminal() {
           {sessions.length === 0 && (
             <div className="flex items-center justify-center h-64 text-gray-500">
               <button
-                onClick={createSession}
+                onClick={() => createSession()}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
               >
                 <Plus className="h-5 w-5" />
@@ -367,30 +704,55 @@ function Terminal() {
           )}
         </div>
 
-        {/* Security Notice - only in non-fullscreen */}
+        {/* Info Notice - only in non-fullscreen */}
         {!isFullscreen && (
           <div className="p-4 pt-0">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+            <div className={`border rounded-md p-4 ${
+              persistentMode
+                ? 'bg-blue-50 border-blue-200'
+                : 'bg-yellow-50 border-yellow-200'
+            }`}>
               <div className="flex">
                 <div className="flex-shrink-0">
-                  <svg
-                    className="h-5 w-5 text-yellow-400"
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                  {persistentMode ? (
+                    <svg
+                      className="h-5 w-5 text-blue-400"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  ) : (
+                    <svg
+                      className="h-5 w-5 text-yellow-400"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  )}
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm text-yellow-700">
-                    <strong>Security Notice:</strong> This terminal provides direct shell access to the server.
-                    All commands are executed with the server process permissions. Use with caution.
-                  </p>
+                  {persistentMode ? (
+                    <p className="text-sm text-blue-700">
+                      <strong>Persistent Mode Enabled:</strong> Terminal sessions will keep running on the server even when you close the browser or navigate away. Use the settings panel to manage your sessions.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-yellow-700">
+                      <strong>Security Notice:</strong> This terminal provides direct shell access to the server.
+                      All commands are executed with the server process permissions. Enable persistent mode in settings to keep sessions running when you navigate away.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

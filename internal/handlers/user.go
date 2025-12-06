@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/pandeptwidyaop/http-remote/internal/config"
 	"github.com/pandeptwidyaop/http-remote/internal/middleware"
 	"github.com/pandeptwidyaop/http-remote/internal/models"
 	"github.com/pandeptwidyaop/http-remote/internal/services"
@@ -13,13 +14,18 @@ import (
 
 // UserHandler handles user management endpoints.
 type UserHandler struct {
-	authService  *services.AuthService
-	auditService *services.AuditService
+	authService      *services.AuthService
+	auditService     *services.AuditService
+	defaultAdminUser string
 }
 
 // NewUserHandler creates a new UserHandler instance.
-func NewUserHandler(authService *services.AuthService, auditService *services.AuditService) *UserHandler {
-	return &UserHandler{authService: authService, auditService: auditService}
+func NewUserHandler(authService *services.AuthService, auditService *services.AuditService, cfg *config.Config) *UserHandler {
+	return &UserHandler{
+		authService:      authService,
+		auditService:     auditService,
+		defaultAdminUser: cfg.Admin.Username,
+	}
 }
 
 // CreateUserRequest represents a request to create a user.
@@ -183,6 +189,18 @@ func (h *UserHandler) Update(c *gin.Context) {
 		return
 	}
 
+	// Prevent modifying the default admin user's username or role
+	if existingUser.Username == h.defaultAdminUser {
+		if req.Username != h.defaultAdminUser {
+			c.JSON(http.StatusForbidden, gin.H{"error": "cannot change the default admin username"})
+			return
+		}
+		if req.Role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "cannot change the default admin role"})
+			return
+		}
+	}
+
 	// If demoting last admin, prevent it
 	if existingUser.Role == models.RoleAdmin && req.Role != "admin" {
 		count, err := h.authService.CountAdminUsers()
@@ -310,6 +328,12 @@ func (h *UserHandler) Delete(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Prevent deleting the default admin user from config
+	if targetUser.Username == h.defaultAdminUser {
+		c.JSON(http.StatusForbidden, gin.H{"error": "cannot delete the default admin user"})
 		return
 	}
 

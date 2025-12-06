@@ -34,11 +34,14 @@ func setupUserHandlerTest(t *testing.T, role models.UserRole) (*handlers.UserHan
 		Auth: config.AuthConfig{
 			BcryptCost: 4, // Low cost for faster tests
 		},
+		Admin: config.AdminConfig{
+			Username: "defaultadmin",
+		},
 	}
 
 	authService := services.NewAuthService(db, cfg, nil)
 	auditService := services.NewAuditService(db)
-	handler := handlers.NewUserHandler(authService, auditService)
+	handler := handlers.NewUserHandler(authService, auditService, cfg)
 
 	// Create test admin user
 	_, err = authService.CreateUserWithRole("admin", "password", models.RoleAdmin)
@@ -111,11 +114,14 @@ func TestUserHandler_List_AsViewer(t *testing.T) {
 
 	cfg := &config.Config{
 		Auth: config.AuthConfig{BcryptCost: 4},
+		Admin: config.AdminConfig{
+			Username: "defaultadmin",
+		},
 	}
 
 	authService := services.NewAuthService(db, cfg, nil)
 	auditService := services.NewAuditService(db)
-	handler := handlers.NewUserHandler(authService, auditService)
+	handler := handlers.NewUserHandler(authService, auditService, cfg)
 
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
@@ -280,11 +286,14 @@ func TestUserHandler_Delete_CannotDeleteLastAdmin(t *testing.T) {
 
 	cfg := &config.Config{
 		Auth: config.AuthConfig{BcryptCost: 4},
+		Admin: config.AdminConfig{
+			Username: "defaultadmin",
+		},
 	}
 
 	authService := services.NewAuthService(db, cfg, nil)
 	auditService := services.NewAuditService(db)
-	handler := handlers.NewUserHandler(authService, auditService)
+	handler := handlers.NewUserHandler(authService, auditService, cfg)
 
 	// Create only one admin
 	admin, _ := authService.CreateUserWithRole("admin", "password", models.RoleAdmin)

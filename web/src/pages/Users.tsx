@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, Key, Shield, UserCog, Eye } from 'lucide-react';
 import Button from '@/components/ui/Button';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+import { api } from '@/api/client';
 
 interface User {
   id: number;
@@ -49,23 +48,16 @@ export default function Users() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/api/users?limit=100`, {
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        if (response.status === 403) {
-          throw new Error('You do not have permission to view users');
-        }
-        throw new Error('Failed to fetch users');
-      }
-
-      const data: UsersResponse = await response.json();
+      const data = await api.get<UsersResponse>('/api/users?limit=100');
       setUsers(data.users || []);
       setTotal(data.total);
       setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+    } catch (err: any) {
+      if (err.status === 403) {
+        setError('You do not have permission to view users');
+      } else {
+        setError(err.message || 'Failed to fetch users');
+      }
     } finally {
       setLoading(false);
     }
@@ -81,27 +73,17 @@ export default function Users() {
     setSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE}/api/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          username: formUsername,
-          password: formPassword,
-          role: formRole,
-        }),
+      await api.post('/api/users', {
+        username: formUsername,
+        password: formPassword,
+        role: formRole,
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create user');
-      }
 
       setShowCreateModal(false);
       resetForm();
       fetchUsers();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'An error occurred');
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to create user');
     } finally {
       setSubmitting(false);
     }
@@ -115,26 +97,16 @@ export default function Users() {
     setSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE}/api/users/${selectedUser.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          username: formUsername,
-          role: formRole,
-        }),
+      await api.put(`/api/users/${selectedUser.id}`, {
+        username: formUsername,
+        role: formRole,
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to update user');
-      }
 
       setShowEditModal(false);
       resetForm();
       fetchUsers();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'An error occurred');
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to update user');
     } finally {
       setSubmitting(false);
     }
@@ -148,24 +120,14 @@ export default function Users() {
     setSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE}/api/users/${selectedUser.id}/password`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          password: formPassword,
-        }),
+      await api.put(`/api/users/${selectedUser.id}/password`, {
+        password: formPassword,
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to update password');
-      }
 
       setShowPasswordModal(false);
       resetForm();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'An error occurred');
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to update password');
     } finally {
       setSubmitting(false);
     }
@@ -178,21 +140,13 @@ export default function Users() {
     setSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE}/api/users/${selectedUser.id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to delete user');
-      }
+      await api.delete(`/api/users/${selectedUser.id}`);
 
       setShowDeleteModal(false);
       setSelectedUser(null);
       fetchUsers();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'An error occurred');
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to delete user');
     } finally {
       setSubmitting(false);
     }

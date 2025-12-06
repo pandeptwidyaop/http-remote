@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Package, History, FileText, Settings, Terminal, X, ArrowUpCircle, FolderOpen, Users } from 'lucide-react';
+import { LogOut, LayoutDashboard, Package, History, FileText, Settings, Terminal, X, ArrowUpCircle, FolderOpen, Users, Menu } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useVersionStore } from '@/store/versionStore';
 import Button from '@/components/ui/Button';
@@ -9,11 +9,17 @@ export default function Navbar() {
   const location = useLocation();
   const { user, logout } = useAuthStore();
   const { version, updateInfo, dismissed, fetchVersion, checkForUpdates, dismissUpdate } = useVersionStore();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     fetchVersion();
     checkForUpdates();
   }, [fetchVersion, checkForUpdates]);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     await logout();
@@ -81,17 +87,30 @@ export default function Navbar() {
       <nav className="bg-gray-900 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
+          {/* Mobile menu button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 focus:outline-none"
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? (
+              <X className="h-6 w-6" />
+            ) : (
+              <Menu className="h-6 w-6" />
+            )}
+          </button>
+
           {/* Brand */}
           <div className="flex items-center space-x-2">
             <Link to="/" className="text-xl font-bold hover:text-blue-400 transition-colors">
               HTTP Remote
             </Link>
-            <span className="px-2 py-0.5 text-xs bg-gray-800 text-gray-400 rounded">
+            <span className="px-2 py-0.5 text-xs bg-gray-800 text-gray-400 rounded hidden sm:inline">
               {version?.version || 'dev'}
             </span>
           </div>
 
-          {/* Nav Links */}
+          {/* Nav Links - Desktop */}
           <div className="hidden md:flex items-center space-x-1">
             {navLinks.map((link) => {
               const Icon = link.icon;
@@ -125,15 +144,19 @@ export default function Navbar() {
               onClick={handleLogout}
               className="text-gray-300 hover:text-white hover:bg-gray-800"
             >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
+              <LogOut className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Logout</span>
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Mobile Nav */}
-      <div className="md:hidden border-t border-gray-800">
+      {/* Mobile Nav - Collapsible */}
+      <div
+        className={`md:hidden border-t border-gray-800 overflow-hidden transition-all duration-300 ease-in-out ${
+          mobileMenuOpen ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
         <div className="px-2 pt-2 pb-3 space-y-1">
           {navLinks.map((link) => {
             const Icon = link.icon;
@@ -143,7 +166,7 @@ export default function Navbar() {
               <Link
                 key={link.path}
                 to={link.path}
-                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium ${
+                className={`flex items-center space-x-3 px-3 py-3 rounded-md text-base font-medium ${
                   active
                     ? 'bg-gray-800 text-white'
                     : 'text-gray-300 hover:bg-gray-800 hover:text-white'
@@ -154,6 +177,11 @@ export default function Navbar() {
               </Link>
             );
           })}
+          {/* Mobile user info */}
+          <div className="border-t border-gray-800 mt-2 pt-2 px-3 py-2">
+            <span className="text-sm text-gray-400">Logged in as: </span>
+            <span className="text-sm text-white font-medium">{user?.username}</span>
+          </div>
         </div>
       </div>
       </nav>

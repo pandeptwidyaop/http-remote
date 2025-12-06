@@ -61,8 +61,14 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 
 		c.Data(http.StatusOK, contentType, data)
 	}
-	r.GET(cfg.Server.PathPrefix+"/assets/*filepath", assetHandler)
-	r.HEAD(cfg.Server.PathPrefix+"/assets/*filepath", assetHandler)
+
+	// Handle path_prefix "/" or "" by avoiding double slashes
+	assetPath := "/assets/*filepath"
+	if cfg.Server.PathPrefix != "" && cfg.Server.PathPrefix != "/" {
+		assetPath = cfg.Server.PathPrefix + "/assets/*filepath"
+	}
+	r.GET(assetPath, assetHandler)
+	r.HEAD(assetPath, assetHandler)
 
 	prefix := r.Group(cfg.Server.PathPrefix)
 
@@ -77,7 +83,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	terminalHandler := handlers.NewTerminalHandler(&cfg.Terminal, auditService, cfg.Server.AllowedOrigins)
 	backupHandler := handlers.NewBackupHandler(appService, auditService)
 	fileHandler := handlers.NewFileHandler(cfg, auditService)
-	userHandler := handlers.NewUserHandler(authService, auditService)
+	userHandler := handlers.NewUserHandler(authService, auditService, cfg)
 
 	// Rate limiters
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)   // 5 req/min for login
@@ -143,8 +149,11 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 			protected.POST("/backup/import", backupHandler.Import)
 			protected.GET("/apps/:id/export", backupHandler.ExportApp)
 
-			// Terminal WebSocket endpoint
+			// Terminal endpoints
 			protected.GET("/terminal/ws", terminalHandler.HandleWebSocket)
+			protected.GET("/terminal/sessions", terminalHandler.ListSessions)
+			protected.POST("/terminal/sessions", terminalHandler.CreateSession)
+			protected.DELETE("/terminal/sessions/:session_id", terminalHandler.CloseSession)
 
 			// File management endpoints
 			protected.GET("/files", fileHandler.ListFiles)
@@ -169,7 +178,11 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 
 	// Serve SPA at the path prefix
 	// This handles React Router's HashRouter
-	r.GET(cfg.Server.PathPrefix+"/", func(c *gin.Context) {
+	spaPath := "/"
+	if cfg.Server.PathPrefix != "" && cfg.Server.PathPrefix != "/" {
+		spaPath = cfg.Server.PathPrefix + "/"
+	}
+	r.GET(spaPath, func(c *gin.Context) {
 		data, err := fs.ReadFile(distFS, "index.html")
 		if err != nil {
 			c.String(http.StatusInternalServerError, "Failed to load index.html: "+err.Error())

@@ -23,6 +23,7 @@ import {
   FolderPlus,
 } from 'lucide-react';
 import { api } from '@/api/client';
+import { getPathPrefix } from '@/lib/config';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Modal from '@/components/ui/Modal';
@@ -242,7 +243,7 @@ export default function Files() {
 
   // Download file
   const downloadFile = (file: FileInfo) => {
-    const pathPrefix = window.location.pathname.split('/').slice(0, 2).join('/') || '';
+    const pathPrefix = getPathPrefix();
     window.open(`${pathPrefix}/api/files/download?path=${encodeURIComponent(file.path)}`, '_blank');
   };
 
@@ -321,7 +322,7 @@ export default function Files() {
       formData.append('path', currentPath);
       formData.append('overwrite', 'true');
 
-      const pathPrefix = window.location.pathname.split('/').slice(0, 2).join('/') || '';
+      const pathPrefix = getPathPrefix();
       const response = await fetch(`${pathPrefix}/api/files/upload`, {
         method: 'POST',
         body: formData,
