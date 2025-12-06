@@ -200,7 +200,7 @@ func (s *AuthService) Login(username, password string) (*models.Session, error) 
 	}
 
 	// Invalidate old sessions for this user (session regeneration)
-	s.InvalidateUserSessions(user.ID)
+	_ = s.InvalidateUserSessions(user.ID)
 
 	return s.CreateSession(user.ID)
 }
@@ -268,7 +268,7 @@ func (s *AuthService) ValidateSessionWithBinding(sessionID, ipAddress, userAgent
 	}
 
 	if time.Now().After(session.ExpiresAt) {
-		s.DeleteSession(sessionID)
+		_ = s.DeleteSession(sessionID)
 		return nil, ErrSessionExpired
 	}
 
@@ -288,7 +288,7 @@ func (s *AuthService) ValidateSessionWithBinding(sessionID, ipAddress, userAgent
 		if session.UserAgentHash != currentHash {
 			// User-Agent mismatch - likely session hijacking
 			log.Printf("Session binding mismatch: User-Agent changed for session %s", sessionID)
-			s.DeleteSession(sessionID)
+			_ = s.DeleteSession(sessionID)
 			return nil, ErrSessionNotFound
 		}
 	}
@@ -681,7 +681,7 @@ func (s *AuthService) IsPasswordInHistory(userID int64, password string) (bool, 
 	if err != nil {
 		return false, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var hash string
@@ -712,7 +712,7 @@ func (s *AuthService) GetAllUsers(limit, offset int) ([]*models.User, int, error
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var users []*models.User
 	for rows.Next() {

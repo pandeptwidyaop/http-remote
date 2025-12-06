@@ -185,6 +185,7 @@ func (m *TerminalSessionManager) CreateSession(userID int64, username string) (*
 	}
 
 	// Start shell with PTY
+	// #nosec G204 - shell execution is expected behavior for terminal service
 	cmd := exec.Command(m.cfg.Shell, m.cfg.Args...)
 	env := append(os.Environ(), "TERM=xterm-256color")
 	env = append(env, m.cfg.Env...)
@@ -289,7 +290,7 @@ func (s *TerminalSession) readLoop() {
 			copy(data, buf[:n])
 
 			// Store in buffer for replay
-			s.buffer.Write(data)
+			_, _ = s.buffer.Write(data)
 
 			// Update activity
 			s.mu.Lock()

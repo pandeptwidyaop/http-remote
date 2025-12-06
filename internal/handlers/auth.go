@@ -230,7 +230,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	_ = h.authService.ClearLoginAttempts(req.Username)
 	_ = h.authService.RecordLoginAttempt(req.Username, c.ClientIP(), true)
 
-	h.authService.InvalidateUserSessions(user.ID)
+	_ = h.authService.InvalidateUserSessions(user.ID)
 	session, err := h.authService.CreateSessionWithBinding(user.ID, c.ClientIP(), c.GetHeader("User-Agent"))
 	if err != nil {
 		if c.GetHeader("Content-Type") == "application/json" {
@@ -314,11 +314,13 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	})
 }
 
+// ChangePasswordRequest represents a request to change user password.
 type ChangePasswordRequest struct {
 	OldPassword string `json:"old_password" binding:"required"`
 	NewPassword string `json:"new_password" binding:"required,min=8"`
 }
 
+// ChangePassword handles password change requests for authenticated users.
 func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	userObj, exists := c.Get(middleware.UserContextKey)
 	if !exists {
@@ -359,7 +361,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	}
 
 	// Audit password change
-	h.auditService.Log(services.AuditLog{
+	_ = h.auditService.Log(services.AuditLog{
 		UserID:       &user.ID,
 		Username:     user.Username,
 		Action:       "password_changed",

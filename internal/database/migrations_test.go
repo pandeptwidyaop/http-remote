@@ -17,7 +17,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 
 func TestCreateMigrationsTable(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	err := createMigrationsTable(db)
 	if err != nil {
@@ -42,7 +42,7 @@ func TestCreateMigrationsTable(t *testing.T) {
 
 func TestRecordMigration(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	err := createMigrationsTable(db)
 	if err != nil {
@@ -76,7 +76,7 @@ func TestRecordMigration(t *testing.T) {
 
 func TestHasMigrationRun(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	err := createMigrationsTable(db)
 	if err != nil {
@@ -110,7 +110,7 @@ func TestHasMigrationRun(t *testing.T) {
 
 func TestRunMigrations(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	err := runMigrations(db)
 	if err != nil {
@@ -139,7 +139,7 @@ func TestRunMigrations(t *testing.T) {
 
 func TestMigrateExecutionsTable(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create old-style executions table with user_id FK
 	_, err := db.Exec(`
@@ -230,7 +230,7 @@ func TestMigrateExecutionsTable(t *testing.T) {
 
 func TestAddAppsUpdatedAtColumn(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create old apps table without updated_at column
 	_, err := db.Exec(`

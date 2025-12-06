@@ -52,7 +52,7 @@ func SecurityHeaders() gin.HandlerFunc {
 
 // StrictTransportSecurity adds HSTS header for HTTPS connections.
 // This should only be used when the server is behind HTTPS.
-func StrictTransportSecurity(maxAge int) gin.HandlerFunc {
+func StrictTransportSecurity(_ int) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Only add HSTS header if the request came over HTTPS
 		// Check X-Forwarded-Proto for reverse proxy setups

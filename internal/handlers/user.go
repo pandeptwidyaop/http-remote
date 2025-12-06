@@ -134,7 +134,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 	}
 
 	// Log audit
-	h.auditService.Log(services.AuditLog{
+	_ = h.auditService.Log(services.AuditLog{
 		UserID:       &currentUser.ID,
 		Username:     currentUser.Username,
 		Action:       "user_create",
@@ -221,7 +221,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 	}
 
 	// Log audit
-	h.auditService.Log(services.AuditLog{
+	_ = h.auditService.Log(services.AuditLog{
 		UserID:       &currentUser.ID,
 		Username:     currentUser.Username,
 		Action:       "user_update",
@@ -280,10 +280,10 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 	}
 
 	// Invalidate all sessions for this user
-	h.authService.InvalidateUserSessions(id)
+	_ = h.authService.InvalidateUserSessions(id)
 
 	// Log audit
-	h.auditService.Log(services.AuditLog{
+	_ = h.auditService.Log(services.AuditLog{
 		UserID:       &currentUser.ID,
 		Username:     currentUser.Username,
 		Action:       "user_password_reset",
@@ -360,7 +360,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	}
 
 	// Log audit
-	h.auditService.Log(services.AuditLog{
+	_ = h.auditService.Log(services.AuditLog{
 		UserID:       &currentUser.ID,
 		Username:     currentUser.Username,
 		Action:       "user_delete",

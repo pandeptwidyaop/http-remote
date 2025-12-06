@@ -64,7 +64,7 @@ func setupAppTestDB(t *testing.T) (*database.DB, *sql.DB) {
 
 func TestAppService_CreateApp(t *testing.T) {
 	db, sqlDB := setupAppTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	appSvc := services.NewAppService(db)
 
@@ -97,7 +97,7 @@ func TestAppService_CreateApp(t *testing.T) {
 
 func TestAppService_CreateApp_DuplicateName(t *testing.T) {
 	db, sqlDB := setupAppTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	appSvc := services.NewAppService(db)
 
@@ -123,7 +123,7 @@ func TestAppService_CreateApp_DuplicateName(t *testing.T) {
 
 func TestAppService_GetAppByID(t *testing.T) {
 	db, sqlDB := setupAppTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	appSvc := services.NewAppService(db)
 
@@ -156,14 +156,14 @@ func TestAppService_GetAppByID(t *testing.T) {
 
 func TestAppService_GetAllApps(t *testing.T) {
 	db, sqlDB := setupAppTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	appSvc := services.NewAppService(db)
 
 	// Create multiple apps
-	appSvc.CreateApp(&models.CreateAppRequest{Name: "App 1", WorkingDir: "/tmp/1"})
-	appSvc.CreateApp(&models.CreateAppRequest{Name: "App 2", WorkingDir: "/tmp/2"})
-	appSvc.CreateApp(&models.CreateAppRequest{Name: "App 3", WorkingDir: "/tmp/3"})
+	_, _ = appSvc.CreateApp(&models.CreateAppRequest{Name: "App 1", WorkingDir: "/tmp/1"})
+	_, _ = appSvc.CreateApp(&models.CreateAppRequest{Name: "App 2", WorkingDir: "/tmp/2"})
+	_, _ = appSvc.CreateApp(&models.CreateAppRequest{Name: "App 3", WorkingDir: "/tmp/3"})
 
 	apps, err := appSvc.GetAllApps()
 	if err != nil {
@@ -177,7 +177,7 @@ func TestAppService_GetAllApps(t *testing.T) {
 
 func TestAppService_UpdateApp(t *testing.T) {
 	db, sqlDB := setupAppTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	appSvc := services.NewAppService(db)
 
@@ -212,7 +212,7 @@ func TestAppService_UpdateApp(t *testing.T) {
 
 func TestAppService_DeleteApp(t *testing.T) {
 	db, sqlDB := setupAppTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	appSvc := services.NewAppService(db)
 
@@ -243,7 +243,7 @@ func TestAppService_DeleteApp(t *testing.T) {
 
 func TestAppService_RegenerateToken(t *testing.T) {
 	db, sqlDB := setupAppTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	appSvc := services.NewAppService(db)
 
@@ -274,7 +274,7 @@ func TestAppService_RegenerateToken(t *testing.T) {
 
 func TestAppService_CreateCommand(t *testing.T) {
 	db, sqlDB := setupAppTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	appSvc := services.NewAppService(db)
 
@@ -315,7 +315,7 @@ func TestAppService_CreateCommand(t *testing.T) {
 
 func TestAppService_ListCommands(t *testing.T) {
 	db, sqlDB := setupAppTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	appSvc := services.NewAppService(db)
 
@@ -326,11 +326,11 @@ func TestAppService_ListCommands(t *testing.T) {
 	})
 
 	// Create multiple commands
-	appSvc.CreateCommand(app.ID, &models.CreateCommandRequest{
+	_, _ = appSvc.CreateCommand(app.ID, &models.CreateCommandRequest{
 		Name:    "deploy",
 		Command: "echo deploy",
 	})
-	appSvc.CreateCommand(app.ID, &models.CreateCommandRequest{
+	_, _ = appSvc.CreateCommand(app.ID, &models.CreateCommandRequest{
 		Name:    "build",
 		Command: "echo build",
 	})
@@ -348,7 +348,7 @@ func TestAppService_ListCommands(t *testing.T) {
 
 func TestAppService_DeleteCommand(t *testing.T) {
 	db, sqlDB := setupAppTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	appSvc := services.NewAppService(db)
 

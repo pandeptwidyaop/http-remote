@@ -29,7 +29,7 @@ func NewTwoFAHandler(authService *services.AuthService, auditService *services.A
 	}
 }
 
-// SetupRequest represents the request to setup 2FA
+// SetupTOTPRequest represents the request to setup 2FA.
 type SetupTOTPRequest struct {
 	Code string `json:"code" binding:"required"`
 }

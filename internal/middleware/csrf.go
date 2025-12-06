@@ -12,7 +12,7 @@ import (
 
 const (
 	// CSRFTokenHeader is the header name for CSRF token
-	CSRFTokenHeader = "X-CSRF-Token"
+	CSRFTokenHeader = "X-CSRF-Token" // #nosec G101 - not a credential, just a header name
 	// CSRFTokenCookie is the cookie name for CSRF token
 	CSRFTokenCookie = "csrf_token"
 	// CSRFContextKey is the key for storing CSRF token in request context
@@ -141,7 +141,7 @@ func CSRFProtection(store *CSRFStore, pathPrefix string, secureCookie bool) gin.
 }
 
 // ensureCSRFToken makes sure a CSRF token cookie exists
-func ensureCSRFToken(c *gin.Context, store *CSRFStore, pathPrefix string, secureCookie bool) {
+func ensureCSRFToken(c *gin.Context, store *CSRFStore, _ string, secureCookie bool) {
 	// Check if token already exists in cookie
 	existingToken, err := c.Cookie(CSRFTokenCookie)
 	if err == nil && existingToken != "" && store.ValidateToken(existingToken) {

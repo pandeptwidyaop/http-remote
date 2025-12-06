@@ -51,7 +51,7 @@ func (h *FileHandler) logFileAction(c *gin.Context, action, path string, details
 		return
 	}
 
-	h.auditService.Log(services.AuditLog{
+	_ = h.auditService.Log(services.AuditLog{
 		UserID:       &u.ID,
 		Username:     u.Username,
 		Action:       action,
@@ -414,7 +414,7 @@ func (h *FileHandler) CreateDirectory(c *gin.Context) {
 	}
 
 	// Create directory with parents
-	if err := os.MkdirAll(path, 0755); err != nil {
+	if err := os.MkdirAll(path, 0750); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -453,13 +453,13 @@ func (h *FileHandler) SaveFile(c *gin.Context) {
 
 	// Create parent directories if they don't exist
 	parentDir := filepath.Dir(path)
-	if err := os.MkdirAll(parentDir, 0755); err != nil {
+	if err := os.MkdirAll(parentDir, 0750); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Write file
-	if err := os.WriteFile(path, []byte(req.Content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(req.Content), 0600); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -517,7 +517,7 @@ func (h *FileHandler) RenameFile(c *gin.Context) {
 
 	// Create parent directories for destination if needed
 	parentDir := filepath.Dir(newPath)
-	if err := os.MkdirAll(parentDir, 0755); err != nil {
+	if err := os.MkdirAll(parentDir, 0750); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -589,7 +589,7 @@ func (h *FileHandler) CopyFile(c *gin.Context) {
 
 	// Create parent directories for destination if needed
 	parentDir := filepath.Dir(destPath)
-	if err := os.MkdirAll(parentDir, 0755); err != nil {
+	if err := os.MkdirAll(parentDir, 0750); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -600,7 +600,7 @@ func (h *FileHandler) CopyFile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	defer source.Close()
+	defer func() { _ = source.Close() }()
 
 	// Create destination file
 	dest, err := os.Create(destPath)
@@ -608,7 +608,7 @@ func (h *FileHandler) CopyFile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	defer dest.Close()
+	defer func() { _ = dest.Close() }()
 
 	// Copy content
 	if _, err := io.Copy(dest, source); err != nil {
@@ -616,10 +616,8 @@ func (h *FileHandler) CopyFile(c *gin.Context) {
 		return
 	}
 
-	// Preserve permissions
-	if err := os.Chmod(destPath, sourceInfo.Mode()); err != nil {
-		// Non-fatal error, just log it
-	}
+	// Preserve permissions (non-fatal if fails)
+	_ = os.Chmod(destPath, sourceInfo.Mode())
 
 	info, _ := os.Stat(destPath)
 

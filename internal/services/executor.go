@@ -112,7 +112,7 @@ func (s *ExecutorService) GetExecutions(limit, offset int) ([]models.ExecutionWi
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var executions []models.ExecutionWithDetails
 	for rows.Next() {
@@ -188,7 +188,7 @@ func (s *ExecutorService) Execute(executionID string) error {
 	log.Printf("[Executor] Running command '%s' in %s (execution %s)", command.Name, app.WorkingDir, executionID)
 
 	now := time.Now()
-	s.db.Exec(
+	_, _ = s.db.Exec(
 		"UPDATE executions SET status = ?, started_at = ? WHERE id = ?",
 		models.StatusRunning, now, executionID,
 	)
@@ -201,6 +201,7 @@ func (s *ExecutorService) Execute(executionID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
+	// #nosec G204 - command execution with user input is expected behavior for this service
 	cmd := exec.CommandContext(ctx, "sh", "-c", command.Command)
 	cmd.Dir = app.WorkingDir
 
@@ -283,7 +284,7 @@ func (s *ExecutorService) streamOutput(executionID string, r io.Reader, output *
 
 func (s *ExecutorService) finishExecution(id string, status models.ExecutionStatus, output string, exitCode int) {
 	now := time.Now()
-	s.db.Exec(
+	_, _ = s.db.Exec(
 		"UPDATE executions SET status = ?, output = ?, exit_code = ?, finished_at = ? WHERE id = ?",
 		status, output, exitCode, now, id,
 	)
@@ -331,7 +332,7 @@ func (s *ExecutorService) broadcastLine(executionID string, line string) {
 	}
 }
 
-func (s *ExecutorService) broadcastComplete(executionID string, exitCode int, status models.ExecutionStatus) {
+func (s *ExecutorService) broadcastComplete(executionID string, _ int, status models.ExecutionStatus) {
 	s.streamsMu.RLock()
 	defer s.streamsMu.RUnlock()
 

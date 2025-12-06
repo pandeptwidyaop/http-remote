@@ -5,6 +5,7 @@ import "time"
 // UserRole represents the role of a user
 type UserRole string
 
+// User role constants defining different permission levels.
 const (
 	RoleAdmin    UserRole = "admin"    // Full access to everything
 	RoleOperator UserRole = "operator" // Can execute commands, manage apps, but cannot manage users

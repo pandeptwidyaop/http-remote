@@ -80,7 +80,7 @@ func setupTestDB(t *testing.T) (*database.DB, *sql.DB, *config.Config) {
 
 func TestExecutorService_CreateExecution(t *testing.T) {
 	db, sqlDB, cfg := setupTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	appSvc := services.NewAppService(db)
 	execSvc := services.NewExecutorService(db, cfg, appSvc)
@@ -130,7 +130,7 @@ func TestExecutorService_CreateExecution(t *testing.T) {
 
 func TestExecutorService_GetExecutionByID(t *testing.T) {
 	db, sqlDB, cfg := setupTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	appSvc := services.NewAppService(db)
 	execSvc := services.NewExecutorService(db, cfg, appSvc)
@@ -173,7 +173,7 @@ func TestExecutorService_GetExecutionByID(t *testing.T) {
 
 func TestExecutorService_GetExecutions(t *testing.T) {
 	db, sqlDB, cfg := setupTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	appSvc := services.NewAppService(db)
 	execSvc := services.NewExecutorService(db, cfg, appSvc)
@@ -234,7 +234,7 @@ func TestExecutorService_GetExecutions(t *testing.T) {
 
 func TestExecutorService_GetExecutions_Pagination(t *testing.T) {
 	db, sqlDB, cfg := setupTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	appSvc := services.NewAppService(db)
 	execSvc := services.NewExecutorService(db, cfg, appSvc)
@@ -254,7 +254,7 @@ func TestExecutorService_GetExecutions_Pagination(t *testing.T) {
 
 	// Create 10 executions
 	for i := 0; i < 10; i++ {
-		execSvc.CreateExecution(cmd.ID, 0)
+		_, _ = execSvc.CreateExecution(cmd.ID, 0)
 	}
 
 	// Test pagination

@@ -60,7 +60,7 @@ func (s *AuditService) LogLogin(user *models.User, ip, userAgent string, success
 		action = "login_failed"
 	}
 
-	s.Log(AuditLog{
+	_ = s.Log(AuditLog{
 		UserID:       &user.ID,
 		Username:     user.Username,
 		Action:       action,
@@ -72,7 +72,7 @@ func (s *AuditService) LogLogin(user *models.User, ip, userAgent string, success
 
 // LogLogout logs a user logout event.
 func (s *AuditService) LogLogout(user *models.User, ip, userAgent string) {
-	s.Log(AuditLog{
+	_ = s.Log(AuditLog{
 		UserID:       &user.ID,
 		Username:     user.Username,
 		Action:       "logout",
@@ -84,7 +84,7 @@ func (s *AuditService) LogLogout(user *models.User, ip, userAgent string) {
 
 // LogCommandCreate logs the creation of a new command.
 func (s *AuditService) LogCommandCreate(user *models.User, commandID, commandName string, ip, userAgent string) {
-	s.Log(AuditLog{
+	_ = s.Log(AuditLog{
 		UserID:       &user.ID,
 		Username:     user.Username,
 		Action:       "create",
@@ -100,7 +100,7 @@ func (s *AuditService) LogCommandCreate(user *models.User, commandID, commandNam
 
 // LogCommandUpdate logs command update operations.
 func (s *AuditService) LogCommandUpdate(user *models.User, commandID, commandName string, ip, userAgent string) {
-	s.Log(AuditLog{
+	_ = s.Log(AuditLog{
 		UserID:       &user.ID,
 		Username:     user.Username,
 		Action:       "update",
@@ -116,7 +116,7 @@ func (s *AuditService) LogCommandUpdate(user *models.User, commandID, commandNam
 
 // LogCommandDelete logs command deletion operations.
 func (s *AuditService) LogCommandDelete(user *models.User, commandID, commandName string, ip, userAgent string) {
-	s.Log(AuditLog{
+	_ = s.Log(AuditLog{
 		UserID:       &user.ID,
 		Username:     user.Username,
 		Action:       "delete",
@@ -132,7 +132,7 @@ func (s *AuditService) LogCommandDelete(user *models.User, commandID, commandNam
 
 // LogCommandExecute logs command execution events.
 func (s *AuditService) LogCommandExecute(username string, userID *int64, commandID, commandName, appName string, ip, userAgent string) {
-	s.Log(AuditLog{
+	_ = s.Log(AuditLog{
 		UserID:       userID,
 		Username:     username,
 		Action:       "execute",
@@ -176,7 +176,7 @@ func (s *AuditService) GetLogs(limit, offset int) ([]AuditLogEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Initialize empty slice instead of nil to return [] instead of null in JSON
 	logs := make([]AuditLogEntry, 0)

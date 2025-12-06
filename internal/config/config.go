@@ -106,7 +106,7 @@ func (c *AuthConfig) GetSessionDuration() time.Duration {
 
 // Load reads and parses a configuration file from the given path.
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 - config path is user-provided and expected
 	if err != nil {
 		return nil, err
 	}

@@ -60,7 +60,7 @@ func setupTerminalHandlerTest(t *testing.T) (*handlers.TerminalHandler, *service
 	router.GET("/api/terminal/ws", handler.HandleWebSocket)
 
 	cleanup := func() {
-		db.Close()
+		_ = db.Close()
 	}
 
 	return handler, auditService, router, cleanup
@@ -73,7 +73,7 @@ func TestTerminalHandler_DisabledTerminal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.Migrate(); err != nil {
 		t.Fatalf("failed to migrate database: %v", err)
@@ -118,7 +118,7 @@ func TestTerminalHandler_Unauthorized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.Migrate(); err != nil {
 		t.Fatalf("failed to migrate database: %v", err)
@@ -170,7 +170,7 @@ func TestTerminalHandler_WebSocketConnection(t *testing.T) {
 		}
 		t.Fatalf("failed to connect to WebSocket: %v", err)
 	}
-	defer ws.Close()
+	defer func() { _ = ws.Close() }()
 
 	// Read initial message (should be connection confirmation)
 	_, msg, err := ws.ReadMessage()
@@ -183,7 +183,7 @@ func TestTerminalHandler_WebSocketConnection(t *testing.T) {
 	}
 
 	// Close connection
-	ws.Close()
+	_ = ws.Close()
 
 	// Verify audit log was created for connect
 	logs, err := auditService.GetLogs(10, 0)
@@ -213,7 +213,7 @@ func TestTerminalHandler_NewTerminalHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	cfg := &config.TerminalConfig{
 		Enabled: boolPtr(true),

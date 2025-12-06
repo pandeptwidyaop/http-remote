@@ -87,6 +87,7 @@ func FindAssetURL(release *GitHubRelease) (string, error) {
 
 // Download downloads the new binary to a temporary file
 func Download(url string, progressFn func(downloaded, total int64)) (string, error) {
+	// #nosec G107 - URL is from GitHub API and validated by caller
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to download: %w", err)
@@ -162,6 +163,7 @@ func Install(tmpPath string) error {
 	}
 
 	// Make executable
+	// #nosec G302 - executable needs to be executable by owner and group
 	if err := os.Chmod(execPath, 0755); err != nil {
 		// Try to restore backup
 		_ = os.Rename(backupPath, execPath)

@@ -547,7 +547,7 @@ func add2FAToUsers(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Add totp_secret column (stores encrypted TOTP secret)
 	_, err = tx.Exec(`ALTER TABLE users ADD COLUMN totp_secret TEXT`)

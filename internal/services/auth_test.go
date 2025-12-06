@@ -81,7 +81,7 @@ func setupAuthTestDB(t *testing.T) (*database.DB, *sql.DB, *config.Config) {
 
 func TestAuthService_CreateUser(t *testing.T) {
 	db, sqlDB, cfg := setupAuthTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	authSvc := services.NewAuthService(db, cfg, nil)
 
@@ -109,7 +109,7 @@ func TestAuthService_CreateUser(t *testing.T) {
 
 func TestAuthService_CreateUser_Duplicate(t *testing.T) {
 	db, sqlDB, cfg := setupAuthTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	authSvc := services.NewAuthService(db, cfg, nil)
 
@@ -128,7 +128,7 @@ func TestAuthService_CreateUser_Duplicate(t *testing.T) {
 
 func TestAuthService_GetUserByUsername(t *testing.T) {
 	db, sqlDB, cfg := setupAuthTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	authSvc := services.NewAuthService(db, cfg, nil)
 
@@ -154,7 +154,7 @@ func TestAuthService_GetUserByUsername(t *testing.T) {
 
 func TestAuthService_CheckPassword(t *testing.T) {
 	db, sqlDB, cfg := setupAuthTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	authSvc := services.NewAuthService(db, cfg, nil)
 
@@ -177,12 +177,12 @@ func TestAuthService_CheckPassword(t *testing.T) {
 
 func TestAuthService_Login(t *testing.T) {
 	db, sqlDB, cfg := setupAuthTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	authSvc := services.NewAuthService(db, cfg, nil)
 
 	// Create user
-	authSvc.CreateUser("loginuser", "password123", false)
+	_, _ = authSvc.CreateUser("loginuser", "password123", false)
 
 	// Test successful login
 	session, err := authSvc.Login("loginuser", "password123")
@@ -213,7 +213,7 @@ func TestAuthService_Login(t *testing.T) {
 
 func TestAuthService_ValidateSession(t *testing.T) {
 	db, sqlDB, cfg := setupAuthTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	authSvc := services.NewAuthService(db, cfg, nil)
 
@@ -240,7 +240,7 @@ func TestAuthService_ValidateSession(t *testing.T) {
 
 func TestAuthService_ValidateSession_Expired(t *testing.T) {
 	db, sqlDB, cfg := setupAuthTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	// Set very short session duration
 	cfg.Auth.SessionDuration = "1ms"
@@ -248,7 +248,7 @@ func TestAuthService_ValidateSession_Expired(t *testing.T) {
 	authSvc := services.NewAuthService(db, cfg, nil)
 
 	// Create user and login
-	authSvc.CreateUser("expireuser", "password123", false)
+	_, _ = authSvc.CreateUser("expireuser", "password123", false)
 	session, _ := authSvc.Login("expireuser", "password123")
 
 	// Wait for session to expire
@@ -263,12 +263,12 @@ func TestAuthService_ValidateSession_Expired(t *testing.T) {
 
 func TestAuthService_DeleteSession(t *testing.T) {
 	db, sqlDB, cfg := setupAuthTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	authSvc := services.NewAuthService(db, cfg, nil)
 
 	// Create user and login
-	authSvc.CreateUser("logoutuser", "password123", false)
+	_, _ = authSvc.CreateUser("logoutuser", "password123", false)
 	session, _ := authSvc.Login("logoutuser", "password123")
 
 	// Delete session
@@ -286,7 +286,7 @@ func TestAuthService_DeleteSession(t *testing.T) {
 
 func TestAuthService_InvalidateUserSessions(t *testing.T) {
 	db, sqlDB, cfg := setupAuthTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	authSvc := services.NewAuthService(db, cfg, nil)
 
@@ -315,7 +315,7 @@ func TestAuthService_InvalidateUserSessions(t *testing.T) {
 
 func TestAuthService_CleanExpiredSessions(t *testing.T) {
 	db, sqlDB, cfg := setupAuthTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	authSvc := services.NewAuthService(db, cfg, nil)
 
@@ -342,7 +342,7 @@ func TestAuthService_CleanExpiredSessions(t *testing.T) {
 
 func TestAuthService_GenerateSecurePassword(t *testing.T) {
 	db, sqlDB, cfg := setupAuthTestDB(t)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	authSvc := services.NewAuthService(db, cfg, nil)
 

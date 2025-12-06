@@ -13,7 +13,7 @@ func TestMigrationBackwardCompatibility(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open test database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Simulate an old database - create tables without updated_at in apps
 	_, err = db.Exec(`

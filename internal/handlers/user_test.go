@@ -17,7 +17,7 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
-func setupUserHandlerTest(t *testing.T, role models.UserRole) (*handlers.UserHandler, *services.AuthService, *services.AuditService, *gin.Engine, func()) {
+func setupUserHandlerTest(t *testing.T) (*services.AuthService, *services.AuditService, *gin.Engine, func()) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
@@ -51,12 +51,12 @@ func setupUserHandlerTest(t *testing.T, role models.UserRole) (*handlers.UserHan
 
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
-		// Set the current user based on role parameter
+		// Set the current user as admin
 		user := &models.User{
 			ID:       1,
 			Username: "admin",
-			Role:     role,
-			IsAdmin:  role == models.RoleAdmin,
+			Role:     models.RoleAdmin,
+			IsAdmin:  true,
 		}
 		c.Set(middleware.UserContextKey, user)
 		c.Next()
@@ -70,14 +70,14 @@ func setupUserHandlerTest(t *testing.T, role models.UserRole) (*handlers.UserHan
 	router.DELETE("/api/users/:id", handler.Delete)
 
 	cleanup := func() {
-		db.Close()
+		_ = db.Close()
 	}
 
-	return handler, authService, auditService, router, cleanup
+	return authService, auditService, router, cleanup
 }
 
 func TestUserHandler_List_AsAdmin(t *testing.T) {
-	_, _, _, router, cleanup := setupUserHandlerTest(t, models.RoleAdmin)
+	_, _, router, cleanup := setupUserHandlerTest(t)
 	defer cleanup()
 
 	req := httptest.NewRequest("GET", "/api/users", nil)
@@ -106,7 +106,7 @@ func TestUserHandler_List_AsViewer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.Migrate(); err != nil {
 		t.Fatalf("failed to migrate database: %v", err)
@@ -147,7 +147,7 @@ func TestUserHandler_List_AsViewer(t *testing.T) {
 }
 
 func TestUserHandler_Create(t *testing.T) {
-	_, _, auditService, router, cleanup := setupUserHandlerTest(t, models.RoleAdmin)
+	_, auditService, router, cleanup := setupUserHandlerTest(t)
 	defer cleanup()
 
 	body := map[string]string{
@@ -195,11 +195,11 @@ func TestUserHandler_Create(t *testing.T) {
 }
 
 func TestUserHandler_Create_DuplicateUsername(t *testing.T) {
-	_, authService, _, router, cleanup := setupUserHandlerTest(t, models.RoleAdmin)
+	authService, _, router, cleanup := setupUserHandlerTest(t)
 	defer cleanup()
 
 	// Create a user first
-	authService.CreateUserWithRole("existing", "password", models.RoleOperator)
+	_, _ = authService.CreateUserWithRole("existing", "password", models.RoleOperator)
 
 	body := map[string]string{
 		"username": "existing",
@@ -220,7 +220,7 @@ func TestUserHandler_Create_DuplicateUsername(t *testing.T) {
 }
 
 func TestUserHandler_Update(t *testing.T) {
-	_, authService, _, router, cleanup := setupUserHandlerTest(t, models.RoleAdmin)
+	authService, _, router, cleanup := setupUserHandlerTest(t)
 	defer cleanup()
 
 	// Create a user to update
@@ -252,7 +252,7 @@ func TestUserHandler_Update(t *testing.T) {
 }
 
 func TestUserHandler_Delete_CannotDeleteSelf(t *testing.T) {
-	_, _, _, router, cleanup := setupUserHandlerTest(t, models.RoleAdmin)
+	_, _, router, cleanup := setupUserHandlerTest(t)
 	defer cleanup()
 
 	req := httptest.NewRequest("DELETE", "/api/users/1", nil)
@@ -265,7 +265,7 @@ func TestUserHandler_Delete_CannotDeleteSelf(t *testing.T) {
 	}
 
 	var response map[string]string
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 	if response["error"] != "cannot delete your own account" {
 		t.Errorf("expected 'cannot delete your own account' error, got %s", response["error"])
 	}
@@ -278,7 +278,7 @@ func TestUserHandler_Delete_CannotDeleteLastAdmin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.Migrate(); err != nil {
 		t.Fatalf("failed to migrate database: %v", err)
@@ -324,11 +324,11 @@ func TestUserHandler_Delete_CannotDeleteLastAdmin(t *testing.T) {
 }
 
 func TestUserHandler_UpdatePassword(t *testing.T) {
-	_, authService, _, router, cleanup := setupUserHandlerTest(t, models.RoleAdmin)
+	authService, _, router, cleanup := setupUserHandlerTest(t)
 	defer cleanup()
 
 	// Create a user to update password
-	authService.CreateUserWithRole("passworduser", "oldpassword", models.RoleOperator)
+	_, _ = authService.CreateUserWithRole("passworduser", "oldpassword", models.RoleOperator)
 
 	body := map[string]string{
 		"password": "newpassword123",
@@ -347,7 +347,7 @@ func TestUserHandler_UpdatePassword(t *testing.T) {
 }
 
 func TestUserHandler_Get(t *testing.T) {
-	_, _, _, router, cleanup := setupUserHandlerTest(t, models.RoleAdmin)
+	_, _, router, cleanup := setupUserHandlerTest(t)
 	defer cleanup()
 
 	req := httptest.NewRequest("GET", "/api/users/1", nil)
@@ -370,7 +370,7 @@ func TestUserHandler_Get(t *testing.T) {
 }
 
 func TestUserHandler_Get_NotFound(t *testing.T) {
-	_, _, _, router, cleanup := setupUserHandlerTest(t, models.RoleAdmin)
+	_, _, router, cleanup := setupUserHandlerTest(t)
 	defer cleanup()
 
 	req := httptest.NewRequest("GET", "/api/users/999", nil)

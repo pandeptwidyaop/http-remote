@@ -422,7 +422,7 @@ func (h *TerminalHandler) handleEphemeralSession(ws *websocket.Conn, user *model
 	}
 
 	// Mark for cleanup when WebSocket closes
-	defer h.sessionManager.CloseSession(session.ID)
+	defer func() { _ = h.sessionManager.CloseSession(session.ID) }()
 
 	clientID := fmt.Sprintf("ephemeral-%d-%d", user.ID, time.Now().UnixNano())
 	outputCh, _ := session.Subscribe(clientID)

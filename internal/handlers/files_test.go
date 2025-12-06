@@ -21,7 +21,7 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
-func setupFileHandlerTest(t *testing.T) (*handlers.FileHandler, *services.AuditService, *gin.Engine, func()) {
+func setupFileHandlerTest(t *testing.T) (*services.AuditService, *gin.Engine, func()) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
@@ -69,14 +69,14 @@ func setupFileHandlerTest(t *testing.T) (*handlers.FileHandler, *services.AuditS
 	router.DELETE("/api/files", handler.DeleteFile)
 
 	cleanup := func() {
-		db.Close()
+		_ = db.Close()
 	}
 
-	return handler, auditService, router, cleanup
+	return auditService, router, cleanup
 }
 
 func TestFileHandler_ListFiles(t *testing.T) {
-	_, _, router, cleanup := setupFileHandlerTest(t)
+	_, router, cleanup := setupFileHandlerTest(t)
 	defer cleanup()
 
 	// Create temp directory with some files
@@ -84,11 +84,11 @@ func TestFileHandler_ListFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
 
 	// Create test files
-	os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("hello"), 0644)
-	os.Mkdir(filepath.Join(tempDir, "subdir"), 0755)
+	_ = os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("hello"), 0644) // #nosec G306
+	_ = os.Mkdir(filepath.Join(tempDir, "subdir"), 0755)                        // #nosec G301
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/files?path="+tempDir, nil)
@@ -114,7 +114,7 @@ func TestFileHandler_ListFiles(t *testing.T) {
 }
 
 func TestFileHandler_ListFiles_NotFound(t *testing.T) {
-	_, _, router, cleanup := setupFileHandlerTest(t)
+	_, router, cleanup := setupFileHandlerTest(t)
 	defer cleanup()
 
 	w := httptest.NewRecorder()
@@ -127,7 +127,7 @@ func TestFileHandler_ListFiles_NotFound(t *testing.T) {
 }
 
 func TestFileHandler_ReadFile(t *testing.T) {
-	_, _, router, cleanup := setupFileHandlerTest(t)
+	_, router, cleanup := setupFileHandlerTest(t)
 	defer cleanup()
 
 	// Create temp file
@@ -135,11 +135,11 @@ func TestFileHandler_ReadFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tempFile.Name())
+	defer func(name string) { _ = os.Remove(name) }(tempFile.Name())
 
 	content := "Hello, World!"
-	tempFile.WriteString(content)
-	tempFile.Close()
+	_, _ = tempFile.WriteString(content)
+	_ = tempFile.Close()
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/files/read?path="+tempFile.Name(), nil)
@@ -164,14 +164,14 @@ func TestFileHandler_ReadFile(t *testing.T) {
 }
 
 func TestFileHandler_ReadFile_Directory(t *testing.T) {
-	_, _, router, cleanup := setupFileHandlerTest(t)
+	_, router, cleanup := setupFileHandlerTest(t)
 	defer cleanup()
 
 	tempDir, err := os.MkdirTemp("", "filehandler_test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/files/read?path="+tempDir, nil)
@@ -183,14 +183,14 @@ func TestFileHandler_ReadFile_Directory(t *testing.T) {
 }
 
 func TestFileHandler_CreateDirectory(t *testing.T) {
-	_, auditService, router, cleanup := setupFileHandlerTest(t)
+	auditService, router, cleanup := setupFileHandlerTest(t)
 	defer cleanup()
 
 	tempDir, err := os.MkdirTemp("", "filehandler_test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
 
 	newDirPath := filepath.Join(tempDir, "newdir")
 	body := `{"path":"` + newDirPath + `"}`
@@ -232,14 +232,14 @@ func TestFileHandler_CreateDirectory(t *testing.T) {
 }
 
 func TestFileHandler_SaveFile(t *testing.T) {
-	_, auditService, router, cleanup := setupFileHandlerTest(t)
+	auditService, router, cleanup := setupFileHandlerTest(t)
 	defer cleanup()
 
 	tempDir, err := os.MkdirTemp("", "filehandler_test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
 
 	filePath := filepath.Join(tempDir, "test.txt")
 	content := "Hello, World!"
@@ -255,7 +255,7 @@ func TestFileHandler_SaveFile(t *testing.T) {
 	}
 
 	// Verify file was created with content
-	data, err := os.ReadFile(filePath)
+	data, err := os.ReadFile(filePath) // #nosec G304 - test file
 	if err != nil {
 		t.Fatalf("failed to read file: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestFileHandler_SaveFile(t *testing.T) {
 }
 
 func TestFileHandler_DeleteFile(t *testing.T) {
-	_, auditService, router, cleanup := setupFileHandlerTest(t)
+	auditService, router, cleanup := setupFileHandlerTest(t)
 	defer cleanup()
 
 	// Create temp file to delete
@@ -290,7 +290,7 @@ func TestFileHandler_DeleteFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	tempFile.Close()
+	_ = tempFile.Close()
 	filePath := tempFile.Name()
 
 	w := httptest.NewRecorder()
@@ -325,7 +325,7 @@ func TestFileHandler_DeleteFile(t *testing.T) {
 }
 
 func TestFileHandler_DeleteFile_SystemPath(t *testing.T) {
-	_, _, router, cleanup := setupFileHandlerTest(t)
+	_, router, cleanup := setupFileHandlerTest(t)
 	defer cleanup()
 
 	systemPaths := []string{"/", "/bin", "/etc", "/usr", "/var"}
@@ -342,18 +342,18 @@ func TestFileHandler_DeleteFile_SystemPath(t *testing.T) {
 }
 
 func TestFileHandler_RenameFile(t *testing.T) {
-	_, auditService, router, cleanup := setupFileHandlerTest(t)
+	auditService, router, cleanup := setupFileHandlerTest(t)
 	defer cleanup()
 
 	tempDir, err := os.MkdirTemp("", "filehandler_test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
 
 	oldPath := filepath.Join(tempDir, "old.txt")
 	newPath := filepath.Join(tempDir, "new.txt")
-	os.WriteFile(oldPath, []byte("content"), 0644)
+	_ = os.WriteFile(oldPath, []byte("content"), 0644) // #nosec G306 - test file
 
 	body := `{"old_path":"` + oldPath + `","new_path":"` + newPath + `"}`
 
@@ -395,19 +395,19 @@ func TestFileHandler_RenameFile(t *testing.T) {
 }
 
 func TestFileHandler_CopyFile(t *testing.T) {
-	_, auditService, router, cleanup := setupFileHandlerTest(t)
+	auditService, router, cleanup := setupFileHandlerTest(t)
 	defer cleanup()
 
 	tempDir, err := os.MkdirTemp("", "filehandler_test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
 
 	sourcePath := filepath.Join(tempDir, "source.txt")
 	destPath := filepath.Join(tempDir, "dest.txt")
 	content := "test content"
-	os.WriteFile(sourcePath, []byte(content), 0644)
+	_ = os.WriteFile(sourcePath, []byte(content), 0644) // #nosec G306 - test file
 
 	body := `{"source_path":"` + sourcePath + `","dest_path":"` + destPath + `"}`
 
@@ -426,7 +426,7 @@ func TestFileHandler_CopyFile(t *testing.T) {
 	}
 
 	// Verify dest exists with same content
-	data, err := os.ReadFile(destPath)
+	data, err := os.ReadFile(destPath) // #nosec G304
 	if err != nil {
 		t.Fatalf("failed to read dest file: %v", err)
 	}
@@ -453,25 +453,25 @@ func TestFileHandler_CopyFile(t *testing.T) {
 }
 
 func TestFileHandler_UploadFile(t *testing.T) {
-	_, auditService, router, cleanup := setupFileHandlerTest(t)
+	auditService, router, cleanup := setupFileHandlerTest(t)
 	defer cleanup()
 
 	tempDir, err := os.MkdirTemp("", "filehandler_test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
 
 	// Create multipart form
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	writer.WriteField("path", tempDir)
+	_ = writer.WriteField("path", tempDir)
 	part, err := writer.CreateFormFile("file", "uploaded.txt")
 	if err != nil {
 		t.Fatalf("failed to create form file: %v", err)
 	}
-	part.Write([]byte("uploaded content"))
-	writer.Close()
+	_, _ = part.Write([]byte("uploaded content"))
+	_ = writer.Close()
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/files/upload", &body)
@@ -507,7 +507,7 @@ func TestFileHandler_UploadFile(t *testing.T) {
 }
 
 func TestFileHandler_DownloadFile(t *testing.T) {
-	_, auditService, router, cleanup := setupFileHandlerTest(t)
+	auditService, router, cleanup := setupFileHandlerTest(t)
 	defer cleanup()
 
 	// Create temp file to download
@@ -515,11 +515,11 @@ func TestFileHandler_DownloadFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tempFile.Name())
+	defer func(name string) { _ = os.Remove(name) }(tempFile.Name())
 
 	content := "download content"
-	tempFile.WriteString(content)
-	tempFile.Close()
+	_, _ = tempFile.WriteString(content)
+	_ = tempFile.Close()
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/files/download?path="+tempFile.Name(), nil)
@@ -554,14 +554,14 @@ func TestFileHandler_DownloadFile(t *testing.T) {
 }
 
 func TestFileHandler_AuditLogDetails(t *testing.T) {
-	_, auditService, router, cleanup := setupFileHandlerTest(t)
+	auditService, router, cleanup := setupFileHandlerTest(t)
 	defer cleanup()
 
 	tempDir, err := os.MkdirTemp("", "filehandler_test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) { _ = os.RemoveAll(path) }(tempDir)
 
 	// Test that save action includes file_size in details
 	filePath := filepath.Join(tempDir, "test.txt")
@@ -610,7 +610,7 @@ func TestAuditServiceDirect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.Migrate(); err != nil {
 		t.Fatalf("failed to migrate database: %v", err)
