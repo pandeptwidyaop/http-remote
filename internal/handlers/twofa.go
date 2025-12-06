@@ -174,6 +174,13 @@ func (h *TwoFAHandler) EnableTOTP(c *gin.Context) {
 		return
 	}
 
+	// Generate and store backup codes
+	backupCodes := generateBackupCodes()
+	if err := h.authService.SetBackupCodes(user.ID, backupCodes); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate backup codes"})
+		return
+	}
+
 	// Audit log
 	if h.auditService != nil {
 		_ = h.auditService.Log(services.AuditLog{
@@ -187,8 +194,9 @@ func (h *TwoFAHandler) EnableTOTP(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "2FA enabled successfully",
-		"enabled": true,
+		"message":      "2FA enabled successfully",
+		"enabled":      true,
+		"backup_codes": backupCodes,
 	})
 }
 
@@ -279,7 +287,7 @@ func generateBackupCodes() []string {
 	return codes
 }
 
-// GetBackupCodes returns the user's backup codes
+// GetBackupCodes returns the count of remaining backup codes (not the codes themselves for security)
 func (h *TwoFAHandler) GetBackupCodes(c *gin.Context) {
 	userObj, exists := c.Get("user")
 	if !exists {
@@ -298,10 +306,15 @@ func (h *TwoFAHandler) GetBackupCodes(c *gin.Context) {
 		return
 	}
 
-	// TODO: Decrypt backup codes from user.BackupCodes
-	// For now, return placeholder
+	count, err := h.authService.GetBackupCodesCount(user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get backup codes"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"codes": []string{}, // Will implement with encryption
+		"remaining_codes": count,
+		"message":         "For security, backup codes are only shown when generated. If you need new codes, regenerate them.",
 	})
 }
 
@@ -326,10 +339,26 @@ func (h *TwoFAHandler) RegenerateBackupCodes(c *gin.Context) {
 
 	codes := generateBackupCodes()
 
-	// TODO: Encrypt and store backup codes
-	// For now, return generated codes
+	// Store hashed backup codes
+	if err := h.authService.SetBackupCodes(user.ID, codes); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store backup codes"})
+		return
+	}
+
+	// Audit log
+	if h.auditService != nil {
+		_ = h.auditService.Log(services.AuditLog{
+			UserID:       &user.ID,
+			Username:     user.Username,
+			Action:       "regenerate_backup_codes",
+			ResourceType: "auth",
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"codes":   codes,
-		"message": "Backup codes regenerated. Save these codes in a secure location.",
+		"message": "Backup codes regenerated. Save these codes in a secure location. Each code can only be used once.",
 	})
 }

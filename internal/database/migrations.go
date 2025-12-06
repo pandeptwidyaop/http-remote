@@ -216,6 +216,22 @@ func runVersionedMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Migration: Add password history table
+	migrationName = "2025_12_06_000005_add_password_history"
+	hasRun, err = hasMigrationRun(db, migrationName)
+	if err != nil {
+		return err
+	}
+
+	if !hasRun {
+		if err := addPasswordHistoryTable(db); err != nil {
+			return err
+		}
+		if err := recordMigration(db, migrationName, batch); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -423,6 +439,26 @@ func addLoginAttemptsTable(db *sql.DB) error {
 	}
 
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_login_attempts_created_at ON login_attempts(created_at)`)
+	return err
+}
+
+// addPasswordHistoryTable creates the password_history table
+func addPasswordHistoryTable(db *sql.DB) error {
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS password_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			password_hash TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Create index for efficient lookups
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_password_history_user_id ON password_history(user_id)`)
 	return err
 }
 

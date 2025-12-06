@@ -46,9 +46,10 @@ func NewAuthHandler(authService *services.AuthService, auditService *services.Au
 
 // LoginRequest contains user login credentials.
 type LoginRequest struct {
-	Username string `json:"username" form:"username" binding:"required"`
-	Password string `json:"password" form:"password" binding:"required"`
-	TOTPCode string `json:"totp_code,omitempty" form:"totp_code"`
+	Username   string `json:"username" form:"username" binding:"required"`
+	Password   string `json:"password" form:"password" binding:"required"`
+	TOTPCode   string `json:"totp_code,omitempty" form:"totp_code"`
+	BackupCode string `json:"backup_code,omitempty" form:"backup_code"`
 }
 
 // LoginPage renders the login page.
@@ -146,8 +147,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	// Check if 2FA is enabled
 	if user.TOTPEnabled {
-		// TOTP is required
-		if req.TOTPCode == "" {
+		// TOTP or backup code is required
+		if req.TOTPCode == "" && req.BackupCode == "" {
 			// Return response indicating 2FA is required
 			if c.GetHeader("Content-Type") == "application/json" {
 				c.JSON(http.StatusOK, gin.H{
@@ -164,8 +165,41 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			return
 		}
 
-		// Verify TOTP code
-		valid := totp.Validate(req.TOTPCode, user.TOTPSecret)
+		var valid bool
+
+		// Try backup code first if provided
+		if req.BackupCode != "" {
+			var err error
+			valid, err = h.authService.ValidateBackupCode(user.ID, req.BackupCode)
+			if err != nil {
+				if c.GetHeader("Content-Type") == "application/json" {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate backup code"})
+					return
+				}
+				c.HTML(http.StatusInternalServerError, "login.html", gin.H{
+					"PathPrefix":   h.pathPrefix,
+					"RequiresTOTP": true,
+					"Username":     req.Username,
+					"Error":        "Failed to validate backup code",
+				})
+				return
+			}
+			if valid {
+				// Audit successful backup code usage
+				_ = h.auditService.Log(services.AuditLog{
+					UserID:       &user.ID,
+					Username:     user.Username,
+					Action:       "backup_code_used",
+					ResourceType: "auth",
+					IPAddress:    c.ClientIP(),
+					UserAgent:    c.GetHeader("User-Agent"),
+				})
+			}
+		} else if req.TOTPCode != "" {
+			// Verify TOTP code
+			valid = totp.Validate(req.TOTPCode, user.TOTPSecret)
+		}
+
 		if !valid {
 			// Audit failed 2FA attempt
 			_ = h.auditService.Log(services.AuditLog{
@@ -178,14 +212,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			})
 
 			if c.GetHeader("Content-Type") == "application/json" {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid 2FA code"})
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid 2FA code or backup code"})
 				return
 			}
 			c.HTML(http.StatusUnauthorized, "login.html", gin.H{
 				"PathPrefix":   h.pathPrefix,
 				"RequiresTOTP": true,
 				"Username":     req.Username,
-				"Error":        "Invalid 2FA code",
+				"Error":        "Invalid 2FA code or backup code",
 			})
 			return
 		}
@@ -314,6 +348,10 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	if err := h.authService.ChangePassword(user.ID, req.OldPassword, req.NewPassword); err != nil {
 		if err == services.ErrInvalidCredentials {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid old password"})
+			return
+		}
+		if err == services.ErrPasswordReused {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to change password"})

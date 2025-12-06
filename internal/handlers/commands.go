@@ -8,6 +8,7 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/middleware"
 	"github.com/pandeptwidyaop/http-remote/internal/models"
 	"github.com/pandeptwidyaop/http-remote/internal/services"
+	"github.com/pandeptwidyaop/http-remote/internal/validation"
 )
 
 // CommandHandler handles HTTP requests for command operations.
@@ -53,6 +54,24 @@ func (h *CommandHandler) Update(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Validate and sanitize input
+	if req.Name != "" {
+		if err := validation.ValidateName(req.Name, 100); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid command name: " + err.Error()})
+			return
+		}
+		req.Name = validation.SanitizeString(req.Name)
+	}
+	if req.Command != "" {
+		if err := validation.ValidateCommand(req.Command, 4096); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid command: " + err.Error()})
+			return
+		}
+	}
+	if req.Description != "" {
+		req.Description = validation.SanitizeString(req.Description)
 	}
 
 	cmd, err := h.appService.UpdateCommand(id, &req)

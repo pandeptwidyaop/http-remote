@@ -81,11 +81,12 @@ func (s *AuthService) GetUserByID(id int64) (*models.User, error) {
 	var user models.User
 	var totpSecret sql.NullString
 	var totpEnabled sql.NullBool
+	var backupCodes sql.NullString
 
 	err := s.db.QueryRow(
-		"SELECT id, username, password_hash, is_admin, COALESCE(totp_secret, ''), COALESCE(totp_enabled, 0), created_at, updated_at FROM users WHERE id = ?",
+		"SELECT id, username, password_hash, is_admin, COALESCE(totp_secret, ''), COALESCE(totp_enabled, 0), COALESCE(backup_codes, ''), created_at, updated_at FROM users WHERE id = ?",
 		id,
-	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &totpSecret, &totpEnabled, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &totpSecret, &totpEnabled, &backupCodes, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, ErrUserNotFound
@@ -108,6 +109,7 @@ func (s *AuthService) GetUserByID(id int64) (*models.User, error) {
 	}
 
 	user.TOTPEnabled = totpEnabled.Bool
+	user.BackupCodes = backupCodes.String
 	return &user, nil
 }
 
@@ -116,11 +118,12 @@ func (s *AuthService) GetUserByUsername(username string) (*models.User, error) {
 	var user models.User
 	var totpSecret sql.NullString
 	var totpEnabled sql.NullBool
+	var backupCodes sql.NullString
 
 	err := s.db.QueryRow(
-		"SELECT id, username, password_hash, is_admin, COALESCE(totp_secret, ''), COALESCE(totp_enabled, 0), created_at, updated_at FROM users WHERE username = ?",
+		"SELECT id, username, password_hash, is_admin, COALESCE(totp_secret, ''), COALESCE(totp_enabled, 0), COALESCE(backup_codes, ''), created_at, updated_at FROM users WHERE username = ?",
 		username,
-	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &totpSecret, &totpEnabled, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsAdmin, &totpSecret, &totpEnabled, &backupCodes, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, ErrUserNotFound
@@ -143,6 +146,7 @@ func (s *AuthService) GetUserByUsername(username string) (*models.User, error) {
 	}
 
 	user.TOTPEnabled = totpEnabled.Bool
+	user.BackupCodes = backupCodes.String
 	return &user, nil
 }
 
@@ -341,11 +345,28 @@ func (s *AuthService) ChangePassword(userID int64, oldPassword, newPassword stri
 		return ErrInvalidCredentials
 	}
 
+	// Check if new password is same as old
+	if s.CheckPassword(newPassword, user.PasswordHash) {
+		return ErrPasswordReused
+	}
+
+	// Check password history
+	inHistory, err := s.IsPasswordInHistory(userID, newPassword)
+	if err != nil {
+		return err
+	}
+	if inHistory {
+		return ErrPasswordReused
+	}
+
 	// Hash new password
 	hashedPassword, err := s.HashPassword(newPassword)
 	if err != nil {
 		return err
 	}
+
+	// Add current password to history before changing
+	_ = s.AddPasswordToHistory(userID, user.PasswordHash)
 
 	// Update password
 	_, err = s.db.Exec("UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", hashedPassword, userID)
@@ -427,4 +448,220 @@ func (s *AuthService) GetRecentFailedAttempts(username string) int {
 	`, username, windowStart).Scan(&count)
 
 	return count
+}
+
+// SetBackupCodes stores encrypted backup codes for a user
+func (s *AuthService) SetBackupCodes(userID int64, codes []string) error {
+	// Hash each code before storing (one-way)
+	hashedCodes := make([]string, len(codes))
+	for i, code := range codes {
+		hash := sha256.Sum256([]byte(code))
+		hashedCodes[i] = hex.EncodeToString(hash[:])
+	}
+
+	// Join hashed codes with comma
+	codesStr := ""
+	for i, h := range hashedCodes {
+		if i > 0 {
+			codesStr += ","
+		}
+		codesStr += h
+	}
+
+	// Encrypt the hashed codes
+	storedCodes := codesStr
+	if s.crypto != nil {
+		encrypted, err := s.crypto.Encrypt(codesStr)
+		if err != nil {
+			return err
+		}
+		storedCodes = encrypted
+	}
+
+	_, err := s.db.Exec("UPDATE users SET backup_codes = ? WHERE id = ?", storedCodes, userID)
+	return err
+}
+
+// GetBackupCodesCount returns the number of remaining backup codes
+func (s *AuthService) GetBackupCodesCount(userID int64) (int, error) {
+	user, err := s.GetUserByID(userID)
+	if err != nil {
+		return 0, err
+	}
+
+	if user.BackupCodes == "" {
+		return 0, nil
+	}
+
+	// Decrypt codes
+	codesStr := user.BackupCodes
+	if s.crypto != nil {
+		decrypted, err := s.crypto.Decrypt(user.BackupCodes)
+		if err != nil {
+			// Try using as-is (migration path)
+			codesStr = user.BackupCodes
+		} else {
+			codesStr = decrypted
+		}
+	}
+
+	if codesStr == "" {
+		return 0, nil
+	}
+
+	// Count non-empty codes (used codes are removed)
+	codes := splitNonEmpty(codesStr, ",")
+	return len(codes), nil
+}
+
+// ValidateBackupCode validates and consumes a backup code
+func (s *AuthService) ValidateBackupCode(userID int64, code string) (bool, error) {
+	user, err := s.GetUserByID(userID)
+	if err != nil {
+		return false, err
+	}
+
+	if user.BackupCodes == "" {
+		return false, nil
+	}
+
+	// Decrypt codes
+	codesStr := user.BackupCodes
+	if s.crypto != nil {
+		decrypted, err := s.crypto.Decrypt(user.BackupCodes)
+		if err != nil {
+			// Try using as-is (migration path)
+			codesStr = user.BackupCodes
+		} else {
+			codesStr = decrypted
+		}
+	}
+
+	// Hash the input code
+	inputHash := sha256.Sum256([]byte(code))
+	inputHashStr := hex.EncodeToString(inputHash[:])
+
+	// Check if code matches any stored hash
+	codes := splitNonEmpty(codesStr, ",")
+	foundIdx := -1
+	for i, storedHash := range codes {
+		if storedHash == inputHashStr {
+			foundIdx = i
+			break
+		}
+	}
+
+	if foundIdx == -1 {
+		return false, nil
+	}
+
+	// Remove used code
+	newCodes := make([]string, 0, len(codes)-1)
+	for i, c := range codes {
+		if i != foundIdx {
+			newCodes = append(newCodes, c)
+		}
+	}
+
+	// Save updated codes
+	newCodesStr := ""
+	for i, c := range newCodes {
+		if i > 0 {
+			newCodesStr += ","
+		}
+		newCodesStr += c
+	}
+
+	storedCodes := newCodesStr
+	if s.crypto != nil && newCodesStr != "" {
+		encrypted, err := s.crypto.Encrypt(newCodesStr)
+		if err != nil {
+			return false, err
+		}
+		storedCodes = encrypted
+	}
+
+	_, err = s.db.Exec("UPDATE users SET backup_codes = ? WHERE id = ?", storedCodes, userID)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// splitNonEmpty splits a string and returns non-empty parts
+func splitNonEmpty(s, sep string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := make([]string, 0)
+	start := 0
+	for i := 0; i <= len(s); i++ {
+		if i == len(s) || (i < len(s) && string(s[i]) == sep) {
+			if i > start {
+				parts = append(parts, s[start:i])
+			}
+			start = i + 1
+		}
+	}
+	return parts
+}
+
+// Password History constants
+const (
+	PasswordHistoryLimit = 5 // Number of previous passwords to remember
+)
+
+// ErrPasswordReused indicates the password was used recently
+var ErrPasswordReused = errors.New("password was used recently, please choose a different password")
+
+// AddPasswordToHistory adds a password hash to the user's password history
+func (s *AuthService) AddPasswordToHistory(userID int64, passwordHash string) error {
+	_, err := s.db.Exec(
+		"INSERT INTO password_history (user_id, password_hash) VALUES (?, ?)",
+		userID, passwordHash,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Clean up old entries beyond the limit
+	_, err = s.db.Exec(`
+		DELETE FROM password_history
+		WHERE user_id = ?
+		AND id NOT IN (
+			SELECT id FROM password_history
+			WHERE user_id = ?
+			ORDER BY created_at DESC
+			LIMIT ?
+		)
+	`, userID, userID, PasswordHistoryLimit)
+
+	return err
+}
+
+// IsPasswordInHistory checks if a password matches any in the user's history
+func (s *AuthService) IsPasswordInHistory(userID int64, password string) (bool, error) {
+	rows, err := s.db.Query(`
+		SELECT password_hash FROM password_history
+		WHERE user_id = ?
+		ORDER BY created_at DESC
+		LIMIT ?
+	`, userID, PasswordHistoryLimit)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var hash string
+		if err := rows.Scan(&hash); err != nil {
+			return false, err
+		}
+		if s.CheckPassword(password, hash) {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }

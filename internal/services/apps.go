@@ -83,6 +83,23 @@ func (s *AppService) GetAppByToken(token string) (*models.App, error) {
 	return &app, nil
 }
 
+// GetAppByName retrieves an application by its name.
+func (s *AppService) GetAppByName(name string) (*models.App, error) {
+	var app models.App
+	err := s.db.QueryRow(
+		"SELECT id, name, description, working_dir, token, created_at, updated_at FROM apps WHERE name = ?",
+		name,
+	).Scan(&app.ID, &app.Name, &app.Description, &app.WorkingDir, &app.Token, &app.CreatedAt, &app.UpdatedAt)
+
+	if err == sql.ErrNoRows {
+		return nil, ErrAppNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &app, nil
+}
+
 // GetAllApps retrieves all applications ordered by name.
 func (s *AppService) GetAllApps() ([]models.App, error) {
 	rows, err := s.db.Query(
