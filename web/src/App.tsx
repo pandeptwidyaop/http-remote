@@ -16,6 +16,7 @@ import AuditLogs from './pages/AuditLogs';
 import Settings from './pages/Settings';
 import Terminal from './pages/Terminal';
 import Files from './pages/Files';
+import Users from './pages/Users';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -135,6 +136,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Files />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/users"
+          element={
+            <ProtectedRoute>
+              <Users />
             </ProtectedRoute>
           }
         />

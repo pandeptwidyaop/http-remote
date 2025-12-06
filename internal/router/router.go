@@ -70,6 +70,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	versionHandler := handlers.NewVersionHandler()
 	terminalHandler := handlers.NewTerminalHandler(&cfg.Terminal, auditService)
 	fileHandler := handlers.NewFileHandler(cfg, auditService)
+	userHandler := handlers.NewUserHandler(authService, auditService)
 
 	// Rate limiters
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)   // 5 req/min for login
@@ -141,6 +142,14 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 			protected.POST("/files/rename", fileHandler.RenameFile)
 			protected.POST("/files/copy", fileHandler.CopyFile)
 			protected.DELETE("/files", fileHandler.DeleteFile)
+
+			// User management endpoints (admin only)
+			protected.GET("/users", userHandler.List)
+			protected.POST("/users", userHandler.Create)
+			protected.GET("/users/:id", userHandler.Get)
+			protected.PUT("/users/:id", userHandler.Update)
+			protected.PUT("/users/:id/password", userHandler.UpdatePassword)
+			protected.DELETE("/users/:id", userHandler.Delete)
 		}
 	}
 

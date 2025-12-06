@@ -1,9 +1,13 @@
 // Types matching Go models from backend
 
+export type UserRole = 'admin' | 'operator' | 'viewer';
+
 export interface User {
   id: number;
   username: string;
   is_admin: boolean;
+  role: UserRole;
+  totp_enabled?: boolean;
   created_at: string;
   updated_at: string;
 }

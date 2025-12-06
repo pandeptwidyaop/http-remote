@@ -184,6 +184,22 @@ func runVersionedMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Migration: Add role column to users table
+	migrationName = "2025_12_06_000003_add_role_to_users"
+	hasRun, err = hasMigrationRun(db, migrationName)
+	if err != nil {
+		return err
+	}
+
+	if !hasRun {
+		if err := addRoleToUsers(db); err != nil {
+			return err
+		}
+		if err := recordMigration(db, migrationName, batch); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -328,6 +344,52 @@ func addAppsUpdatedAtColumn(db *sql.DB) error {
 			UPDATE apps SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 		END
 	`)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// addRoleToUsers adds role column to users table
+func addRoleToUsers(db *sql.DB) error {
+	// Check if column already exists
+	var count int
+	err := db.QueryRow(`
+		SELECT COUNT(*) FROM pragma_table_info('users')
+		WHERE name = 'role'
+	`).Scan(&count)
+
+	if err != nil {
+		return err
+	}
+
+	// Column already exists, skip migration
+	if count > 0 {
+		return nil
+	}
+
+	// Begin transaction
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Add role column with default 'viewer'
+	_, err = tx.Exec(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'viewer'`)
+	if err != nil {
+		return err
+	}
+
+	// Set existing admin users to 'admin' role
+	_, err = tx.Exec(`UPDATE users SET role = 'admin' WHERE is_admin = 1`)
+	if err != nil {
+		return err
+	}
+
+	// Set non-admin users to 'operator' role (for backward compatibility)
+	_, err = tx.Exec(`UPDATE users SET role = 'operator' WHERE is_admin = 0 OR is_admin IS NULL`)
 	if err != nil {
 		return err
 	}
