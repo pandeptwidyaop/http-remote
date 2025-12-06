@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Package, History, FileText, Settings } from 'lucide-react';
+import { LogOut, LayoutDashboard, Package, History, FileText, Settings, Terminal } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import Button from '@/components/ui/Button';
 
@@ -15,6 +15,7 @@ export default function Navbar() {
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/apps', label: 'Apps', icon: Package },
     { path: '/executions', label: 'History', icon: History },
+    { path: '/terminal', label: 'Terminal', icon: Terminal },
     { path: '/audit-logs', label: 'Audit Logs', icon: FileText },
     { path: '/settings', label: 'Settings', icon: Settings },
   ];

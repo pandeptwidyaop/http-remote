@@ -68,6 +68,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	deployHandler := handlers.NewDeployHandler(appService, executorService, cfg.Server.PathPrefix)
 	auditHandler := handlers.NewAuditHandler(auditService, cfg.Server.PathPrefix)
 	versionHandler := handlers.NewVersionHandler()
+	terminalHandler := handlers.NewTerminalHandler()
 
 	// Rate limiters
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)   // 5 req/min for login
@@ -124,6 +125,9 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 
 			protected.GET("/audit-logs", auditHandler.List)
 			protected.GET("/version/check", versionHandler.CheckUpdate)
+
+			// Terminal WebSocket endpoint
+			protected.GET("/terminal/ws", terminalHandler.HandleWebSocket)
 		}
 	}
 
