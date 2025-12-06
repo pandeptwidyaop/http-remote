@@ -372,5 +372,11 @@ func add2FAToUsers(db *sql.DB) error {
 		return err
 	}
 
+	// Add backup_codes column (stores encrypted backup codes as JSON array)
+	_, err = tx.Exec(`ALTER TABLE users ADD COLUMN backup_codes TEXT`)
+	if err != nil {
+		return err
+	}
+
 	return tx.Commit()
 }
