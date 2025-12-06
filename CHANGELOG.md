@@ -1,3 +1,12 @@
+# [1.11.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.10.0...v1.11.0) (2025-12-06)
+
+
+### Features
+
+* add account lockout for brute force protection ([406de47](https://github.com/pandeptwidyaop/http-remote/commit/406de4734c30b3739c4d667eb69de859329375da))
+* add comprehensive audit logging to all handlers ([25a88b3](https://github.com/pandeptwidyaop/http-remote/commit/25a88b3ff9f69369075264c5826dcc5c06696bc5))
+* add session binding and CSRF protection ([b6ff77f](https://github.com/pandeptwidyaop/http-remote/commit/b6ff77f2c9dfb4e1b4872c96c187d50d205d0ada))
+
 # [1.10.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.9.0...v1.10.0) (2025-12-06)
 
 
