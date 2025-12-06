@@ -2,6 +2,9 @@ server:
   host: "0.0.0.0"
   port: 8080
   path_prefix: "/devops"
+  # allowed_origins:
+  #   - "https://example.com"
+  #   - "*.example.com"
 
 database:
   path: "./data/deploy.db"
@@ -25,3 +28,9 @@ terminal:
   env:
     - "SUDO_ASKPASS=/usr/bin/ssh-askpass"
   # enabled: true  # Set to false to disable terminal
+
+# Security settings
+# security:
+#   # 32-byte encryption key for TOTP secrets (64 hex characters)
+#   # Generate with: openssl rand -hex 32
+#   encryption_key: "your-64-char-hex-key-here"

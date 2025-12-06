@@ -16,6 +16,7 @@ type Config struct {
 	Auth      AuthConfig      `yaml:"auth"`
 	Execution ExecutionConfig `yaml:"execution"`
 	Terminal  TerminalConfig  `yaml:"terminal"`
+	Security  SecurityConfig  `yaml:"security"`
 }
 
 // TerminalConfig holds terminal/PTY configuration.
@@ -36,10 +37,16 @@ func (c *TerminalConfig) IsEnabled() bool {
 
 // ServerConfig holds HTTP server configuration.
 type ServerConfig struct {
-	Host         string `yaml:"host"`
-	PathPrefix   string `yaml:"path_prefix"`
-	Port         int    `yaml:"port"`
-	SecureCookie bool   `yaml:"secure_cookie"`
+	Host           string   `yaml:"host"`
+	PathPrefix     string   `yaml:"path_prefix"`
+	Port           int      `yaml:"port"`
+	SecureCookie   bool     `yaml:"secure_cookie"`
+	AllowedOrigins []string `yaml:"allowed_origins"` // Allowed origins for WebSocket/CORS
+}
+
+// SecurityConfig holds security-related configuration.
+type SecurityConfig struct {
+	EncryptionKey string `yaml:"encryption_key"` // 32-byte key for AES-256-GCM (hex encoded)
 }
 
 // DatabaseConfig holds database configuration.

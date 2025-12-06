@@ -25,6 +25,8 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	r.RedirectFixedPath = false
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logger())
+	r.Use(middleware.SecurityHeaders())
+	r.Use(middleware.StrictTransportSecurity(31536000))
 	r.Use(middleware.PathPrefix(cfg.Server.PathPrefix))
 
 	// Serve SPA static files from embedded filesystem
@@ -68,7 +70,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	deployHandler := handlers.NewDeployHandler(appService, executorService, cfg.Server.PathPrefix)
 	auditHandler := handlers.NewAuditHandler(auditService, cfg.Server.PathPrefix)
 	versionHandler := handlers.NewVersionHandler()
-	terminalHandler := handlers.NewTerminalHandler(&cfg.Terminal)
+	terminalHandler := handlers.NewTerminalHandler(&cfg.Terminal, cfg.Server.AllowedOrigins)
 
 	// Rate limiters
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)   // 5 req/min for login

@@ -31,13 +31,14 @@ var (
 
 // AuthService handles user authentication and session management.
 type AuthService struct {
-	db  *database.DB
-	cfg *config.Config
+	db     *database.DB
+	cfg    *config.Config
+	crypto *CryptoService
 }
 
 // NewAuthService creates a new AuthService instance.
-func NewAuthService(db *database.DB, cfg *config.Config) *AuthService {
-	return &AuthService{db: db, cfg: cfg}
+func NewAuthService(db *database.DB, cfg *config.Config, crypto *CryptoService) *AuthService {
+	return &AuthService{db: db, cfg: cfg, crypto: crypto}
 }
 
 // HashPassword hashes a password using bcrypt.
@@ -89,7 +90,19 @@ func (s *AuthService) GetUserByID(id int64) (*models.User, error) {
 		return nil, err
 	}
 
-	user.TOTPSecret = totpSecret.String
+	// Decrypt TOTP secret if crypto service is available and secret exists
+	if totpSecret.String != "" && s.crypto != nil {
+		decrypted, err := s.crypto.Decrypt(totpSecret.String)
+		if err != nil {
+			// If decryption fails, assume it's a plaintext secret (migration path)
+			user.TOTPSecret = totpSecret.String
+		} else {
+			user.TOTPSecret = decrypted
+		}
+	} else {
+		user.TOTPSecret = totpSecret.String
+	}
+
 	user.TOTPEnabled = totpEnabled.Bool
 	return &user, nil
 }
@@ -112,7 +125,19 @@ func (s *AuthService) GetUserByUsername(username string) (*models.User, error) {
 		return nil, err
 	}
 
-	user.TOTPSecret = totpSecret.String
+	// Decrypt TOTP secret if crypto service is available and secret exists
+	if totpSecret.String != "" && s.crypto != nil {
+		decrypted, err := s.crypto.Decrypt(totpSecret.String)
+		if err != nil {
+			// If decryption fails, assume it's a plaintext secret (migration path)
+			user.TOTPSecret = totpSecret.String
+		} else {
+			user.TOTPSecret = decrypted
+		}
+	} else {
+		user.TOTPSecret = totpSecret.String
+	}
+
 	user.TOTPEnabled = totpEnabled.Bool
 	return &user, nil
 }
@@ -230,9 +255,19 @@ func (s *AuthService) EnsureAdminUser() error {
 	return nil
 }
 
-// SetTOTPSecret stores the TOTP secret for a user
+// SetTOTPSecret stores the TOTP secret for a user (encrypted if crypto service available)
 func (s *AuthService) SetTOTPSecret(userID int64, secret string) error {
-	_, err := s.db.Exec("UPDATE users SET totp_secret = ? WHERE id = ?", secret, userID)
+	// Encrypt the secret if crypto service is available
+	storedSecret := secret
+	if s.crypto != nil {
+		encrypted, err := s.crypto.Encrypt(secret)
+		if err != nil {
+			return err
+		}
+		storedSecret = encrypted
+	}
+
+	_, err := s.db.Exec("UPDATE users SET totp_secret = ? WHERE id = ?", storedSecret, userID)
 	return err
 }
 

@@ -4,8 +4,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/creack/pty"
 	"github.com/gin-gonic/gin"
@@ -16,22 +18,74 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/models"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // TODO: Add proper origin validation
-	},
-}
-
 // TerminalHandler handles interactive terminal sessions over WebSocket.
 type TerminalHandler struct {
-	cfg *config.TerminalConfig
+	cfg            *config.TerminalConfig
+	allowedOrigins []string
+	upgrader       websocket.Upgrader
 }
 
 // NewTerminalHandler creates a new TerminalHandler instance.
-func NewTerminalHandler(cfg *config.TerminalConfig) *TerminalHandler {
-	return &TerminalHandler{cfg: cfg}
+func NewTerminalHandler(cfg *config.TerminalConfig, allowedOrigins []string) *TerminalHandler {
+	h := &TerminalHandler{
+		cfg:            cfg,
+		allowedOrigins: allowedOrigins,
+	}
+
+	h.upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin:     h.checkOrigin,
+	}
+
+	return h
+}
+
+// checkOrigin validates WebSocket connection origins to prevent CSRF attacks.
+func (h *TerminalHandler) checkOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		// No origin header - could be same-origin request or non-browser client
+		// For security, we'll allow it only if there are no allowed origins configured
+		// (backward compatibility for local development)
+		return len(h.allowedOrigins) == 0
+	}
+
+	// Parse the origin URL
+	originURL, err := url.Parse(origin)
+	if err != nil {
+		log.Printf("[Terminal] Invalid origin URL: %s", origin)
+		return false
+	}
+
+	// If no allowed origins configured, allow same-origin only
+	if len(h.allowedOrigins) == 0 {
+		host := r.Host
+		// Compare origin host with request host
+		if originURL.Host == host {
+			return true
+		}
+		// Also check without port for flexibility
+		originHost := originURL.Hostname()
+		requestHost := strings.Split(host, ":")[0]
+		return originHost == requestHost
+	}
+
+	// Check against allowed origins list
+	for _, allowed := range h.allowedOrigins {
+		// Support wildcard matching (e.g., "*.example.com")
+		if strings.HasPrefix(allowed, "*.") {
+			suffix := strings.TrimPrefix(allowed, "*")
+			if strings.HasSuffix(originURL.Host, suffix) || originURL.Host == strings.TrimPrefix(suffix, ".") {
+				return true
+			}
+		} else if allowed == origin || allowed == originURL.Host {
+			return true
+		}
+	}
+
+	log.Printf("[Terminal] Origin not allowed: %s (allowed: %v)", origin, h.allowedOrigins)
+	return false
 }
 
 // HandleWebSocket handles WebSocket terminal connections.
@@ -56,7 +110,7 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 	}
 
 	// Upgrade to WebSocket
-	ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	ws, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("Failed to upgrade to WebSocket: %v", err)
 		return

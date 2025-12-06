@@ -2,6 +2,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"log"
@@ -70,7 +72,32 @@ func main() {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
-	authService := services.NewAuthService(db, cfg)
+	// Initialize crypto service for TOTP secret encryption
+	var cryptoService *services.CryptoService
+	if cfg.Security.EncryptionKey != "" {
+		key, err := hex.DecodeString(cfg.Security.EncryptionKey)
+		if err != nil {
+			log.Fatalf("Invalid encryption key (must be 64 hex chars for 32 bytes): %v", err)
+		}
+		cryptoService, err = services.NewCryptoService(key)
+		if err != nil {
+			log.Fatalf("Failed to initialize crypto service: %v", err)
+		}
+		log.Println("Encryption enabled for sensitive data (TOTP secrets)")
+	} else {
+		// Generate a warning and create a random key for this session
+		log.Println("WARNING: No encryption key configured. Generating random key for this session.")
+		log.Println("         TOTP secrets will be encrypted but won't survive restarts without a persistent key.")
+		log.Println("         Add 'security.encryption_key' to config.yaml with a 64-character hex string.")
+		key := make([]byte, 32)
+		if _, err := rand.Read(key); err != nil {
+			log.Fatalf("Failed to generate random encryption key: %v", err)
+		}
+		log.Printf("         Generated key (save this): %s", hex.EncodeToString(key))
+		cryptoService, _ = services.NewCryptoService(key)
+	}
+
+	authService := services.NewAuthService(db, cfg, cryptoService)
 	appService := services.NewAppService(db)
 	executorService := services.NewExecutorService(db, cfg, appService)
 	auditService := services.NewAuditService(db)
