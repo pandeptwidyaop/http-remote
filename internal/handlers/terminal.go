@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"sync"
 
 	"github.com/creack/pty"
 	"github.com/gin-gonic/gin"
@@ -71,51 +70,58 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 	defer func() { _ = ptmx.Close() }()
 
 
-	// Handle terminal I/O
-	var wg sync.WaitGroup
-	wg.Add(2)
+	// Channel to signal connection close
+	done := make(chan struct{})
 
 	// Read from PTY and send to WebSocket
 	go func() {
-		defer wg.Done()
-		buf := make([]byte, 1024)
+		buf := make([]byte, 4096)
 		for {
-			n, err := ptmx.Read(buf)
-			if err != nil {
-				if err != io.EOF {
-					log.Printf("PTY read error: %v", err)
+			select {
+			case <-done:
+				return
+			default:
+				n, err := ptmx.Read(buf)
+				if err != nil {
+					if err != io.EOF {
+						log.Printf("PTY read error: %v", err)
+					}
+					close(done)
+					return
 				}
-				return
-			}
-			if err := ws.WriteMessage(websocket.BinaryMessage, buf[:n]); err != nil {
-				log.Printf("WebSocket write error: %v", err)
-				return
-			}
-		}
-	}()
-
-	// Read from WebSocket and write to PTY
-	go func() {
-		defer wg.Done()
-		for {
-			msgType, msg, err := ws.ReadMessage()
-			if err != nil {
-				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					log.Printf("WebSocket read error: %v", err)
-				}
-				return
-			}
-
-			if msgType == websocket.TextMessage || msgType == websocket.BinaryMessage {
-				if _, err := ptmx.Write(msg); err != nil {
-					log.Printf("PTY write error: %v", err)
+				if err := ws.WriteMessage(websocket.BinaryMessage, buf[:n]); err != nil {
+					log.Printf("WebSocket write error: %v", err)
+					close(done)
 					return
 				}
 			}
 		}
 	}()
 
-	wg.Wait()
+	// Read from WebSocket and write to PTY
+	for {
+		select {
+		case <-done:
+			goto cleanup
+		default:
+			msgType, msg, err := ws.ReadMessage()
+			if err != nil {
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Printf("WebSocket read error: %v", err)
+				}
+				goto cleanup
+			}
+
+			if msgType == websocket.TextMessage || msgType == websocket.BinaryMessage {
+				if _, err := ptmx.Write(msg); err != nil {
+					log.Printf("PTY write error: %v", err)
+					goto cleanup
+				}
+			}
+		}
+	}
+
+cleanup:
 	_ = cmd.Process.Kill()
 	log.Printf("[Terminal] User %s disconnected", user.Username)
 }

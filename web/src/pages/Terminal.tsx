@@ -39,8 +39,10 @@ function Terminal() {
     fitAddonRef.current = fitAddon;
 
     // Connect to WebSocket
+    // Get path prefix from current URL (e.g., /devops)
+    const pathPrefix = window.location.pathname.split('/').slice(0, 2).join('/') || '';
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}${API_BASE}/api/terminal/ws`;
+    const wsUrl = `${protocol}//${window.location.host}${pathPrefix}/api/terminal/ws`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
