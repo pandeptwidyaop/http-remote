@@ -16,19 +16,22 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/config"
 	"github.com/pandeptwidyaop/http-remote/internal/middleware"
 	"github.com/pandeptwidyaop/http-remote/internal/models"
+	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
 // TerminalHandler handles interactive terminal sessions over WebSocket.
 type TerminalHandler struct {
 	cfg            *config.TerminalConfig
+	auditService   *services.AuditService
 	allowedOrigins []string
 	upgrader       websocket.Upgrader
 }
 
 // NewTerminalHandler creates a new TerminalHandler instance.
-func NewTerminalHandler(cfg *config.TerminalConfig, allowedOrigins []string) *TerminalHandler {
+func NewTerminalHandler(cfg *config.TerminalConfig, auditService *services.AuditService, allowedOrigins []string) *TerminalHandler {
 	h := &TerminalHandler{
 		cfg:            cfg,
+		auditService:   auditService,
 		allowedOrigins: allowedOrigins,
 	}
 
@@ -119,6 +122,18 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 
 	log.Printf("[Terminal] User %s connected", user.Username)
 
+	// Audit log terminal connection
+	if h.auditService != nil {
+		_ = h.auditService.Log(services.AuditLog{
+			UserID:       &user.ID,
+			Username:     user.Username,
+			Action:       "terminal_connect",
+			ResourceType: "terminal",
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+		})
+	}
+
 	// Start shell with PTY using config
 	cmd := exec.Command(h.cfg.Shell, h.cfg.Args...)
 
@@ -190,4 +205,16 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 cleanup:
 	_ = cmd.Process.Kill()
 	log.Printf("[Terminal] User %s disconnected", user.Username)
+
+	// Audit log terminal disconnect
+	if h.auditService != nil {
+		_ = h.auditService.Log(services.AuditLog{
+			UserID:       &user.ID,
+			Username:     user.Username,
+			Action:       "terminal_disconnect",
+			ResourceType: "terminal",
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+		})
+	}
 }

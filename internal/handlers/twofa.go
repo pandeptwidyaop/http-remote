@@ -17,13 +17,15 @@ import (
 
 // TwoFAHandler handles two-factor authentication operations
 type TwoFAHandler struct {
-	authService *services.AuthService
+	authService  *services.AuthService
+	auditService *services.AuditService
 }
 
 // NewTwoFAHandler creates a new TwoFAHandler instance
-func NewTwoFAHandler(authService *services.AuthService) *TwoFAHandler {
+func NewTwoFAHandler(authService *services.AuthService, auditService *services.AuditService) *TwoFAHandler {
 	return &TwoFAHandler{
-		authService: authService,
+		authService:  authService,
+		auditService: auditService,
 	}
 }
 
@@ -172,6 +174,18 @@ func (h *TwoFAHandler) EnableTOTP(c *gin.Context) {
 		return
 	}
 
+	// Audit log
+	if h.auditService != nil {
+		_ = h.auditService.Log(services.AuditLog{
+			UserID:       &user.ID,
+			Username:     user.Username,
+			Action:       "enable_2fa",
+			ResourceType: "auth",
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "2FA enabled successfully",
 		"enabled": true,
@@ -214,6 +228,18 @@ func (h *TwoFAHandler) DisableTOTP(c *gin.Context) {
 	if err := h.authService.DisableTOTP(user.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to disable 2FA"})
 		return
+	}
+
+	// Audit log
+	if h.auditService != nil {
+		_ = h.auditService.Log(services.AuditLog{
+			UserID:       &user.ID,
+			Username:     user.Username,
+			Action:       "disable_2fa",
+			ResourceType: "auth",
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{

@@ -29,6 +29,9 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	r.Use(middleware.StrictTransportSecurity(31536000))
 	r.Use(middleware.PathPrefix(cfg.Server.PathPrefix))
 
+	// Initialize CSRF store for token management
+	csrfStore := middleware.NewCSRFStore()
+
 	// Serve SPA static files from embedded filesystem
 	distFS, err := fs.Sub(assets.EmbeddedFiles, "web/dist")
 	if err != nil {
@@ -63,14 +66,14 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	prefix := r.Group(cfg.Server.PathPrefix)
 
 	authHandler := handlers.NewAuthHandler(authService, auditService, cfg.Server.PathPrefix, cfg.Server.SecureCookie)
-	twoFAHandler := handlers.NewTwoFAHandler(authService)
-	appHandler := handlers.NewAppHandler(appService, cfg.Server.PathPrefix)
+	twoFAHandler := handlers.NewTwoFAHandler(authService, auditService)
+	appHandler := handlers.NewAppHandler(appService, auditService, cfg.Server.PathPrefix)
 	commandHandler := handlers.NewCommandHandler(appService, executorService, auditService, cfg.Server.PathPrefix)
 	streamHandler := handlers.NewStreamHandler(executorService)
 	deployHandler := handlers.NewDeployHandler(appService, executorService, cfg.Server.PathPrefix)
 	auditHandler := handlers.NewAuditHandler(auditService, cfg.Server.PathPrefix)
 	versionHandler := handlers.NewVersionHandler()
-	terminalHandler := handlers.NewTerminalHandler(&cfg.Terminal, cfg.Server.AllowedOrigins)
+	terminalHandler := handlers.NewTerminalHandler(&cfg.Terminal, auditService, cfg.Server.AllowedOrigins)
 
 	// Rate limiters
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)   // 5 req/min for login
@@ -84,6 +87,8 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	prefix.GET("/deploy/:app_id/stream/:execution_id", apiLimiter.Middleware(), deployHandler.DeployStream)
 
 	api := prefix.Group("/api")
+	// Apply CSRF protection to all API routes
+	api.Use(middleware.CSRFProtection(csrfStore, cfg.Server.PathPrefix, cfg.Server.SecureCookie))
 	{
 		// Public version endpoint
 		api.GET("/version", func(c *gin.Context) {

@@ -6,21 +6,24 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/pandeptwidyaop/http-remote/internal/middleware"
 	"github.com/pandeptwidyaop/http-remote/internal/models"
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
 // AppHandler handles HTTP requests for application management.
 type AppHandler struct {
-	appService *services.AppService
-	pathPrefix string
+	appService   *services.AppService
+	auditService *services.AuditService
+	pathPrefix   string
 }
 
 // NewAppHandler creates a new AppHandler instance.
-func NewAppHandler(appService *services.AppService, pathPrefix string) *AppHandler {
+func NewAppHandler(appService *services.AppService, auditService *services.AuditService, pathPrefix string) *AppHandler {
 	return &AppHandler{
-		appService: appService,
-		pathPrefix: pathPrefix,
+		appService:   appService,
+		auditService: auditService,
+		pathPrefix:   pathPrefix,
 	}
 }
 
@@ -70,6 +73,21 @@ func (h *AppHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Audit log
+	user, _ := c.Get(middleware.UserContextKey)
+	if u, ok := user.(*models.User); ok {
+		_ = h.auditService.Log(services.AuditLog{
+			UserID:       &u.ID,
+			Username:     u.Username,
+			Action:       "create",
+			ResourceType: "app",
+			ResourceID:   app.ID,
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+			Details:      map[string]interface{}{"app_name": app.Name},
+		})
+	}
+
 	c.JSON(http.StatusCreated, app)
 }
 
@@ -93,12 +111,30 @@ func (h *AppHandler) Update(c *gin.Context) {
 		return
 	}
 
+	// Audit log
+	user, _ := c.Get(middleware.UserContextKey)
+	if u, ok := user.(*models.User); ok {
+		_ = h.auditService.Log(services.AuditLog{
+			UserID:       &u.ID,
+			Username:     u.Username,
+			Action:       "update",
+			ResourceType: "app",
+			ResourceID:   app.ID,
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+			Details:      map[string]interface{}{"app_name": app.Name},
+		})
+	}
+
 	c.JSON(http.StatusOK, app)
 }
 
 // Delete deletes an application.
 func (h *AppHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
+
+	// Get app info before deleting for audit log
+	app, _ := h.appService.GetAppByID(id)
 
 	if err := h.appService.DeleteApp(id); err != nil {
 		if err == services.ErrAppNotFound {
@@ -107,6 +143,25 @@ func (h *AppHandler) Delete(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Audit log
+	user, _ := c.Get(middleware.UserContextKey)
+	if u, ok := user.(*models.User); ok {
+		details := map[string]interface{}{}
+		if app != nil {
+			details["app_name"] = app.Name
+		}
+		_ = h.auditService.Log(services.AuditLog{
+			UserID:       &u.ID,
+			Username:     u.Username,
+			Action:       "delete",
+			ResourceType: "app",
+			ResourceID:   id,
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+			Details:      details,
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "app deleted"})
@@ -124,6 +179,21 @@ func (h *AppHandler) RegenerateToken(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Audit log
+	user, _ := c.Get(middleware.UserContextKey)
+	if u, ok := user.(*models.User); ok {
+		_ = h.auditService.Log(services.AuditLog{
+			UserID:       &u.ID,
+			Username:     u.Username,
+			Action:       "regenerate_token",
+			ResourceType: "app",
+			ResourceID:   app.ID,
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+			Details:      map[string]interface{}{"app_name": app.Name},
+		})
 	}
 
 	c.JSON(http.StatusOK, app)
@@ -160,6 +230,21 @@ func (h *AppHandler) CreateCommand(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Audit log
+	user, _ := c.Get(middleware.UserContextKey)
+	if u, ok := user.(*models.User); ok {
+		_ = h.auditService.Log(services.AuditLog{
+			UserID:       &u.ID,
+			Username:     u.Username,
+			Action:       "create",
+			ResourceType: "command",
+			ResourceID:   cmd.ID,
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+			Details:      map[string]interface{}{"command_name": cmd.Name, "app_id": appID},
+		})
 	}
 
 	c.JSON(http.StatusCreated, cmd)

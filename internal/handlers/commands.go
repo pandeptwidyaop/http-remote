@@ -134,6 +134,16 @@ func (h *CommandHandler) Execute(c *gin.Context) {
 		return
 	}
 
+	// Get app for audit logging
+	app, _ := h.appService.GetAppByID(cmd.AppID)
+	appName := ""
+	if app != nil {
+		appName = app.Name
+	}
+
+	// Audit log command execution
+	h.auditService.LogCommandExecute(u.Username, &u.ID, cmd.ID, cmd.Name, appName, c.ClientIP(), c.GetHeader("User-Agent"))
+
 	go func() {
 		_ = h.executorService.Execute(execution.ID)
 	}()
