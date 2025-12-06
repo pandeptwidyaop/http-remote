@@ -172,6 +172,22 @@ func runVersionedMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Migration: Add 2FA columns to users table
+	migrationName = "2025_12_06_000002_add_2fa_to_users"
+	hasRun, err = hasMigrationRun(db, migrationName)
+	if err != nil {
+		return err
+	}
+
+	if !hasRun {
+		if err := add2FAToUsers(db); err != nil {
+			return err
+		}
+		if err := recordMigration(db, migrationName, batch); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -316,6 +332,46 @@ func addAppsUpdatedAtColumn(db *sql.DB) error {
 			UPDATE apps SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 		END
 	`)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// add2FAToUsers adds 2FA fields to users table
+func add2FAToUsers(db *sql.DB) error {
+	// Check if columns already exist
+	var count int
+	err := db.QueryRow(`
+		SELECT COUNT(*) FROM pragma_table_info('users')
+		WHERE name IN ('totp_secret', 'totp_enabled')
+	`).Scan(&count)
+
+	if err != nil {
+		return err
+	}
+
+	// Columns already exist, skip migration
+	if count >= 2 {
+		return nil
+	}
+
+	// Begin transaction
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Add totp_secret column (stores encrypted TOTP secret)
+	_, err = tx.Exec(`ALTER TABLE users ADD COLUMN totp_secret TEXT`)
+	if err != nil {
+		return err
+	}
+
+	// Add totp_enabled column (whether user has enabled 2FA)
+	_, err = tx.Exec(`ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN DEFAULT FALSE`)
 	if err != nil {
 		return err
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/middleware"
 	"github.com/pandeptwidyaop/http-remote/internal/models"
 	"github.com/pandeptwidyaop/http-remote/internal/services"
+	"github.com/pquerna/otp/totp"
 )
 
 type AuthHandler struct {
@@ -28,6 +29,7 @@ func NewAuthHandler(authService *services.AuthService, auditService *services.Au
 type LoginRequest struct {
 	Username string `json:"username" form:"username" binding:"required"`
 	Password string `json:"password" form:"password" binding:"required"`
+	TOTPCode string `json:"totp_code,omitempty" form:"totp_code"`
 }
 
 func (h *AuthHandler) LoginPage(c *gin.Context) {
@@ -54,8 +56,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 	}
 
-	session, err := h.authService.Login(req.Username, req.Password)
-	if err != nil {
+	// First, verify username and password
+	user, err := h.authService.GetUserByUsername(req.Username)
+	if err != nil || !h.authService.CheckPassword(req.Password, user.PasswordHash) {
 		// Audit failed login attempt
 		h.auditService.Log(services.AuditLog{
 			Username:     req.Username,
@@ -76,11 +79,70 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Get user for audit log
-	user, _ := h.authService.GetUserByID(session.UserID)
-	if user != nil {
-		h.auditService.LogLogin(user, c.ClientIP(), c.GetHeader("User-Agent"), true)
+	// Check if 2FA is enabled
+	if user.TOTPEnabled {
+		// TOTP is required
+		if req.TOTPCode == "" {
+			// Return response indicating 2FA is required
+			if c.GetHeader("Content-Type") == "application/json" {
+				c.JSON(http.StatusOK, gin.H{
+					"requires_totp": true,
+					"message":       "2FA code required",
+				})
+				return
+			}
+			c.HTML(http.StatusOK, "login.html", gin.H{
+				"PathPrefix":    h.pathPrefix,
+				"RequiresTOTP":  true,
+				"Username":      req.Username,
+			})
+			return
+		}
+
+		// Verify TOTP code
+		valid := totp.Validate(req.TOTPCode, user.TOTPSecret)
+		if !valid {
+			// Audit failed 2FA attempt
+			h.auditService.Log(services.AuditLog{
+				UserID:       &user.ID,
+				Username:     user.Username,
+				Action:       "2fa_failed",
+				ResourceType: "auth",
+				IPAddress:    c.ClientIP(),
+				UserAgent:    c.GetHeader("User-Agent"),
+			})
+
+			if c.GetHeader("Content-Type") == "application/json" {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid 2FA code"})
+				return
+			}
+			c.HTML(http.StatusUnauthorized, "login.html", gin.H{
+				"PathPrefix":    h.pathPrefix,
+				"RequiresTOTP":  true,
+				"Username":      req.Username,
+				"Error":         "Invalid 2FA code",
+			})
+			return
+		}
 	}
+
+	// Create session after successful authentication (including 2FA if enabled)
+	h.authService.InvalidateUserSessions(user.ID)
+	session, err := h.authService.CreateSession(user.ID)
+	if err != nil {
+		if c.GetHeader("Content-Type") == "application/json" {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
+			return
+		}
+		c.HTML(http.StatusInternalServerError, "login.html", gin.H{
+			"PathPrefix": h.pathPrefix,
+			"Error":      "Failed to create session",
+		})
+		return
+	}
+
+	// Audit successful login
+	h.auditService.LogLogin(user, c.ClientIP(), c.GetHeader("User-Agent"), true)
 
 	c.SetCookie(
 		middleware.SessionCookieName,
@@ -138,5 +200,54 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		"id":       u.ID,
 		"username": u.Username,
 		"is_admin": u.IsAdmin,
+	})
+}
+
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+}
+
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	userObj, exists := c.Get(middleware.UserContextKey)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	user, ok := userObj.(*models.User)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Change password
+	if err := h.authService.ChangePassword(user.ID, req.OldPassword, req.NewPassword); err != nil {
+		if err == services.ErrInvalidCredentials {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid old password"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to change password"})
+		return
+	}
+
+	// Audit password change
+	h.auditService.Log(services.AuditLog{
+		UserID:       &user.ID,
+		Username:     user.Username,
+		Action:       "password_changed",
+		ResourceType: "auth",
+		IPAddress:    c.ClientIP(),
+		UserAgent:    c.GetHeader("User-Agent"),
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "password changed successfully",
 	})
 }

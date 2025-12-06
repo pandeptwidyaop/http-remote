@@ -7,6 +7,8 @@ type User struct {
 	Username     string    `json:"username"`
 	PasswordHash string    `json:"-"`
 	IsAdmin      bool      `json:"is_admin"`
+	TOTPSecret   string    `json:"-"` // TOTP secret for 2FA
+	TOTPEnabled  bool      `json:"totp_enabled"` // Whether 2FA is enabled
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
