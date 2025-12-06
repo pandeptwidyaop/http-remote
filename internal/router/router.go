@@ -68,7 +68,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	deployHandler := handlers.NewDeployHandler(appService, executorService, cfg.Server.PathPrefix)
 	auditHandler := handlers.NewAuditHandler(auditService, cfg.Server.PathPrefix)
 	versionHandler := handlers.NewVersionHandler()
-	terminalHandler := handlers.NewTerminalHandler(&cfg.Terminal)
+	terminalHandler := handlers.NewTerminalHandler(&cfg.Terminal, auditService)
 	fileHandler := handlers.NewFileHandler(cfg, auditService)
 
 	// Rate limiters

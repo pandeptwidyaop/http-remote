@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/creack/pty"
 	"github.com/gin-gonic/gin"
@@ -14,6 +15,7 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/config"
 	"github.com/pandeptwidyaop/http-remote/internal/middleware"
 	"github.com/pandeptwidyaop/http-remote/internal/models"
+	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
 var upgrader = websocket.Upgrader{
@@ -26,12 +28,13 @@ var upgrader = websocket.Upgrader{
 
 // TerminalHandler handles interactive terminal sessions over WebSocket.
 type TerminalHandler struct {
-	cfg *config.TerminalConfig
+	cfg          *config.TerminalConfig
+	auditService *services.AuditService
 }
 
 // NewTerminalHandler creates a new TerminalHandler instance.
-func NewTerminalHandler(cfg *config.TerminalConfig) *TerminalHandler {
-	return &TerminalHandler{cfg: cfg}
+func NewTerminalHandler(cfg *config.TerminalConfig, auditService *services.AuditService) *TerminalHandler {
+	return &TerminalHandler{cfg: cfg, auditService: auditService}
 }
 
 // HandleWebSocket handles WebSocket terminal connections.
@@ -64,6 +67,21 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 	defer func() { _ = ws.Close() }()
 
 	log.Printf("[Terminal] User %s connected", user.Username)
+
+	// Log terminal session start
+	sessionStart := time.Now()
+	h.auditService.Log(services.AuditLog{
+		UserID:       &user.ID,
+		Username:     user.Username,
+		Action:       "terminal_connect",
+		ResourceType: "terminal",
+		ResourceID:   "session",
+		IPAddress:    c.ClientIP(),
+		UserAgent:    c.GetHeader("User-Agent"),
+		Details: map[string]interface{}{
+			"shell": h.cfg.Shell,
+		},
+	})
 
 	// Start shell with PTY using config
 	cmd := exec.Command(h.cfg.Shell, h.cfg.Args...)
@@ -135,5 +153,21 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 
 cleanup:
 	_ = cmd.Process.Kill()
-	log.Printf("[Terminal] User %s disconnected", user.Username)
+
+	// Log terminal session end
+	sessionDuration := time.Since(sessionStart)
+	h.auditService.Log(services.AuditLog{
+		UserID:       &user.ID,
+		Username:     user.Username,
+		Action:       "terminal_disconnect",
+		ResourceType: "terminal",
+		ResourceID:   "session",
+		IPAddress:    c.ClientIP(),
+		UserAgent:    c.GetHeader("User-Agent"),
+		Details: map[string]interface{}{
+			"duration_seconds": sessionDuration.Seconds(),
+		},
+	})
+
+	log.Printf("[Terminal] User %s disconnected (duration: %v)", user.Username, sessionDuration)
 }
