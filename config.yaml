@@ -20,7 +20,7 @@ execution:
 
 admin:
   username: "admin"
-  password: "changeme"
+  password: "admin"
 
 terminal:
   shell: "/bin/bash"

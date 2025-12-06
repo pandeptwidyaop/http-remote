@@ -2,6 +2,9 @@
 http-remote
 *.exe
 
+# Web build artifacts
+internal/assets/web/dist/
+
 # Database
 data/
 *.db
