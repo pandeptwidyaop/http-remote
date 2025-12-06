@@ -7,14 +7,38 @@ GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 PKG=github.com/pandeptwidyaop/http-remote/internal/version
 LDFLAGS=-ldflags="-s -w -X $(PKG).Version=$(VERSION) -X $(PKG).BuildTime=$(BUILD_TIME) -X $(PKG).GitCommit=$(GIT_COMMIT)"
 
-.PHONY: all build clean run dev test test-race test-coverage test-coverage-summary test-database test-handlers test-services test-short test-ci lint fmt tidy help
+.PHONY: all build clean run dev test test-race test-coverage test-coverage-summary test-database test-handlers test-services test-short test-ci lint fmt tidy help build-web dev-web clean-web
 
 # Default target
 all: build
 
-# Build binary
-build:
+# Build web UI
+build-web:
+	@echo "Building web UI..."
+	@cd web && npm ci && npm run build
+	@echo "Web UI build complete: internal/assets/web/dist/"
+
+# Development mode for web UI (with hot reload)
+dev-web:
+	@echo "Starting web UI development server..."
+	@cd web && npm run dev
+
+# Clean web build artifacts
+clean-web:
+	@echo "Cleaning web build..."
+	@rm -rf internal/assets/web/dist
+	@rm -rf web/node_modules
+	@echo "Web clean complete"
+
+# Build binary (requires web to be built first)
+build: build-web
 	@echo "Building $(BINARY_NAME)..."
+	CGO_ENABLED=1 go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/server
+	@echo "Build complete: $(BINARY_NAME)"
+
+# Build binary without rebuilding web (for development)
+build-quick:
+	@echo "Building $(BINARY_NAME) (skipping web build)..."
 	CGO_ENABLED=1 go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/server
 	@echo "Build complete: $(BINARY_NAME)"
 
@@ -147,8 +171,14 @@ help:
 	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""
+	@echo "Web UI:"
+	@echo "  build-web        Build React frontend (required before build)"
+	@echo "  dev-web          Start frontend dev server with hot reload"
+	@echo "  clean-web        Remove web build artifacts"
+	@echo ""
 	@echo "Build:"
-	@echo "  build            Build binary for current platform"
+	@echo "  build            Build binary (includes web build)"
+	@echo "  build-quick      Build binary without rebuilding web"
 	@echo "  build-debug      Build with debug symbols"
 	@echo "  build-linux-amd64 Build for Linux AMD64"
 	@echo "  build-linux-arm64 Build for Linux ARM64"
@@ -156,7 +186,11 @@ help:
 	@echo ""
 	@echo "Run:"
 	@echo "  run              Build and run"
-	@echo "  dev              Run with hot reload (requires air)"
+	@echo "  dev              Run backend with hot reload (requires air)"
+	@echo ""
+	@echo "Development Workflow:"
+	@echo "  Terminal 1: make dev-web     (Frontend with HMR)"
+	@echo "  Terminal 2: make build-quick && ./http-remote  (Backend)"
 	@echo ""
 	@echo "Test:"
 	@echo "  test                  Run all tests"
