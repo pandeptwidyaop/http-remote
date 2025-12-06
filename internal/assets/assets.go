@@ -7,9 +7,9 @@ import (
 	"net/http"
 )
 
-//go:embed web/templates/* web/static/css/* web/static/js/*
+//go:embed web/templates/* web/static/css/* web/static/js/* web/dist
 
-// EmbeddedFiles contains all embedded web assets.
+// EmbeddedFiles contains all embedded web assets (templates, static files, and React SPA dist).
 var EmbeddedFiles embed.FS
 
 // GetTemplatesFS returns the templates filesystem.
