@@ -200,6 +200,22 @@ func runVersionedMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Migration: Add session binding columns (IP, User-Agent)
+	migrationName = "2025_12_06_000004_add_session_binding"
+	hasRun, err = hasMigrationRun(db, migrationName)
+	if err != nil {
+		return err
+	}
+
+	if !hasRun {
+		if err := addSessionBindingColumns(db); err != nil {
+			return err
+		}
+		if err := recordMigration(db, migrationName, batch); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -349,6 +365,35 @@ func addAppsUpdatedAtColumn(db *sql.DB) error {
 	}
 
 	return tx.Commit()
+}
+
+// addSessionBindingColumns adds IP and User-Agent columns to sessions table
+func addSessionBindingColumns(db *sql.DB) error {
+	// Check if columns already exist
+	var count int
+	err := db.QueryRow(`
+		SELECT COUNT(*) FROM pragma_table_info('sessions')
+		WHERE name IN ('ip_address', 'user_agent_hash')
+	`).Scan(&count)
+
+	if err != nil {
+		return err
+	}
+
+	// Columns already exist, skip migration
+	if count >= 2 {
+		return nil
+	}
+
+	// Add ip_address column
+	_, err = db.Exec(`ALTER TABLE sessions ADD COLUMN ip_address TEXT`)
+	if err != nil {
+		return err
+	}
+
+	// Add user_agent_hash column
+	_, err = db.Exec(`ALTER TABLE sessions ADD COLUMN user_agent_hash TEXT`)
+	return err
 }
 
 // addLoginAttemptsTable creates the login_attempts table for account lockout

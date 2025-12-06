@@ -2,8 +2,10 @@ package services
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"log"
 	"time"
@@ -167,34 +169,54 @@ func (s *AuthService) InvalidateUserSessions(userID int64) error {
 	return err
 }
 
+// HashUserAgent creates a SHA-256 hash of the User-Agent string
+func (s *AuthService) HashUserAgent(userAgent string) string {
+	hash := sha256.Sum256([]byte(userAgent))
+	return hex.EncodeToString(hash[:])
+}
+
 // CreateSession creates a new session for a user.
 func (s *AuthService) CreateSession(userID int64) (*models.Session, error) {
+	return s.CreateSessionWithBinding(userID, "", "")
+}
+
+// CreateSessionWithBinding creates a new session with IP and User-Agent binding
+func (s *AuthService) CreateSessionWithBinding(userID int64, ipAddress, userAgent string) (*models.Session, error) {
 	sessionID := uuid.New().String()
 	expiresAt := time.Now().Add(s.cfg.Auth.GetSessionDuration())
+	userAgentHash := s.HashUserAgent(userAgent)
 
 	_, err := s.db.Exec(
-		"INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)",
-		sessionID, userID, expiresAt,
+		"INSERT INTO sessions (id, user_id, expires_at, ip_address, user_agent_hash) VALUES (?, ?, ?, ?, ?)",
+		sessionID, userID, expiresAt, ipAddress, userAgentHash,
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	return &models.Session{
-		ID:        sessionID,
-		UserID:    userID,
-		ExpiresAt: expiresAt,
-		CreatedAt: time.Now(),
+		ID:            sessionID,
+		UserID:        userID,
+		ExpiresAt:     expiresAt,
+		CreatedAt:     time.Now(),
+		IPAddress:     ipAddress,
+		UserAgentHash: userAgentHash,
 	}, nil
 }
 
 // ValidateSession validates a session and returns the associated user.
 func (s *AuthService) ValidateSession(sessionID string) (*models.User, error) {
+	return s.ValidateSessionWithBinding(sessionID, "", "")
+}
+
+// ValidateSessionWithBinding validates a session with IP/User-Agent binding check
+func (s *AuthService) ValidateSessionWithBinding(sessionID, ipAddress, userAgent string) (*models.User, error) {
 	var session models.Session
+	var ipAddr, uaHash sql.NullString
 	err := s.db.QueryRow(
-		"SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ?",
+		"SELECT id, user_id, expires_at, created_at, ip_address, user_agent_hash FROM sessions WHERE id = ?",
 		sessionID,
-	).Scan(&session.ID, &session.UserID, &session.ExpiresAt, &session.CreatedAt)
+	).Scan(&session.ID, &session.UserID, &session.ExpiresAt, &session.CreatedAt, &ipAddr, &uaHash)
 
 	if err == sql.ErrNoRows {
 		return nil, ErrSessionNotFound
@@ -206,6 +228,27 @@ func (s *AuthService) ValidateSession(sessionID string) (*models.User, error) {
 	if time.Now().After(session.ExpiresAt) {
 		s.DeleteSession(sessionID)
 		return nil, ErrSessionExpired
+	}
+
+	session.IPAddress = ipAddr.String
+	session.UserAgentHash = uaHash.String
+
+	// Validate session binding if IP/User-Agent were stored
+	if ipAddress != "" && session.IPAddress != "" && session.IPAddress != ipAddress {
+		// IP address mismatch - possible session hijacking
+		log.Printf("Session binding mismatch: IP changed from %s to %s for session %s",
+			session.IPAddress, ipAddress, sessionID)
+		// We log but don't invalidate - IP can change legitimately (mobile networks, VPNs)
+	}
+
+	if userAgent != "" && session.UserAgentHash != "" {
+		currentHash := s.HashUserAgent(userAgent)
+		if session.UserAgentHash != currentHash {
+			// User-Agent mismatch - likely session hijacking
+			log.Printf("Session binding mismatch: User-Agent changed for session %s", sessionID)
+			s.DeleteSession(sessionID)
+			return nil, ErrSessionNotFound
+		}
 	}
 
 	return s.GetUserByID(session.UserID)

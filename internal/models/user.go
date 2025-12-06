@@ -17,8 +17,10 @@ type User struct {
 
 // Session represents a user session.
 type Session struct {
-	ExpiresAt time.Time `json:"expires_at"`
-	CreatedAt time.Time `json:"created_at"`
-	ID        string    `json:"id"`
-	UserID    int64     `json:"user_id"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	CreatedAt     time.Time `json:"created_at"`
+	ID            string    `json:"id"`
+	IPAddress     string    `json:"ip_address"`      // IP address when session was created
+	UserAgentHash string    `json:"user_agent_hash"` // Hash of User-Agent header
+	UserID        int64     `json:"user_id"`
 }

@@ -34,8 +34,8 @@ func TestVersionHandler_CheckUpdate(t *testing.T) {
 	}
 
 	// Should have current version
-	if response["current"] == nil {
-		t.Error("expected current version in response")
+	if response["current_version"] == nil {
+		t.Error("expected current_version in response")
 	}
 
 	// Should have update_available field

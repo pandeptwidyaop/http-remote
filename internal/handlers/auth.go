@@ -196,7 +196,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	_ = h.authService.RecordLoginAttempt(req.Username, c.ClientIP(), true)
 
 	h.authService.InvalidateUserSessions(user.ID)
-	session, err := h.authService.CreateSession(user.ID)
+	session, err := h.authService.CreateSessionWithBinding(user.ID, c.ClientIP(), c.GetHeader("User-Agent"))
 	if err != nil {
 		if c.GetHeader("Content-Type") == "application/json" {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})

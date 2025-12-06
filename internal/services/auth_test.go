@@ -20,7 +20,7 @@ func setupAuthTestDB(t *testing.T) (*database.DB, *sql.DB, *config.Config) {
 
 	db := &database.DB{DB: sqlDB}
 
-	// Create tables with 2FA columns
+	// Create tables with 2FA columns and session binding
 	_, err = sqlDB.Exec(`
 		CREATE TABLE users (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +39,17 @@ func setupAuthTestDB(t *testing.T) (*database.DB, *sql.DB, *config.Config) {
 			user_id INTEGER NOT NULL,
 			expires_at DATETIME NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			ip_address TEXT,
+			user_agent_hash TEXT,
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		);
+
+		CREATE TABLE login_attempts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			username TEXT NOT NULL,
+			ip_address TEXT NOT NULL,
+			success BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 	`)
 	if err != nil {

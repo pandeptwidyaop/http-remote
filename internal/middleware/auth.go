@@ -30,7 +30,12 @@ func AuthRequired(authService *services.AuthService) gin.HandlerFunc {
 			return
 		}
 
-		user, err := authService.ValidateSession(sessionID)
+		// Validate session with IP and User-Agent binding
+		user, err := authService.ValidateSessionWithBinding(
+			sessionID,
+			c.ClientIP(),
+			c.GetHeader("User-Agent"),
+		)
 		if err != nil {
 			c.SetCookie(SessionCookieName, "", -1, "/", "", false, true)
 			if isAPIRequest(c) {

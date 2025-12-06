@@ -1,6 +1,18 @@
 import { getApiUrl } from '@/lib/config';
 import type { ErrorResponse } from '@/types';
 
+// CSRF token management
+function getCSRFToken(): string {
+  const cookies = document.cookie.split(';');
+  for (const cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === 'csrf_token') {
+      return value;
+    }
+  }
+  return '';
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -25,15 +37,27 @@ async function fetchWithTimeout(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
+  // Build headers with CSRF token for state-changing methods
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...fetchOptions.headers as Record<string, string>,
+  };
+
+  // Add CSRF token for non-GET methods
+  const method = fetchOptions.method || 'GET';
+  if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+    const csrfToken = getCSRFToken();
+    if (csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken;
+    }
+  }
+
   try {
     const response = await fetch(url, {
       ...fetchOptions,
       signal: controller.signal,
       credentials: 'include', // Important for session cookies
-      headers: {
-        'Content-Type': 'application/json',
-        ...fetchOptions.headers,
-      },
+      headers,
     });
 
     clearTimeout(timeoutId);
