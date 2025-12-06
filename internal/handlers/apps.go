@@ -9,6 +9,7 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/middleware"
 	"github.com/pandeptwidyaop/http-remote/internal/models"
 	"github.com/pandeptwidyaop/http-remote/internal/services"
+	"github.com/pandeptwidyaop/http-remote/internal/validation"
 )
 
 // AppHandler handles HTTP requests for application management.
@@ -63,6 +64,21 @@ func (h *AppHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Validate and sanitize input
+	if err := validation.ValidateName(req.Name, 100); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid app name: " + err.Error()})
+		return
+	}
+	if req.Description != "" {
+		if err := validation.ValidateDescription(req.Description, 500); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid description: " + err.Error()})
+			return
+		}
+	}
+	// Sanitize inputs
+	req.Name = validation.SanitizeString(req.Name)
+	req.Description = validation.SanitizeString(req.Description)
+
 	app, err := h.appService.CreateApp(&req)
 	if err != nil {
 		if err == services.ErrAppExists {
@@ -99,6 +115,22 @@ func (h *AppHandler) Update(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Validate and sanitize input
+	if req.Name != "" {
+		if err := validation.ValidateName(req.Name, 100); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid app name: " + err.Error()})
+			return
+		}
+		req.Name = validation.SanitizeString(req.Name)
+	}
+	if req.Description != "" {
+		if err := validation.ValidateDescription(req.Description, 500); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid description: " + err.Error()})
+			return
+		}
+		req.Description = validation.SanitizeString(req.Description)
 	}
 
 	app, err := h.appService.UpdateApp(id, &req)
@@ -221,6 +253,18 @@ func (h *AppHandler) CreateCommand(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Validate and sanitize input
+	if err := validation.ValidateName(req.Name, 100); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid command name: " + err.Error()})
+		return
+	}
+	if err := validation.ValidateCommand(req.Command, 4096); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid command: " + err.Error()})
+		return
+	}
+	req.Name = validation.SanitizeString(req.Name)
+	req.Description = validation.SanitizeString(req.Description)
 
 	cmd, err := h.appService.CreateCommand(appID, &req)
 	if err != nil {

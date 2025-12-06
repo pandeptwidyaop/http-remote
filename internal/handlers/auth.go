@@ -10,6 +10,7 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/middleware"
 	"github.com/pandeptwidyaop/http-remote/internal/models"
 	"github.com/pandeptwidyaop/http-remote/internal/services"
+	"github.com/pandeptwidyaop/http-remote/internal/validation"
 	"github.com/pquerna/otp/totp"
 )
 
@@ -299,6 +300,12 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 
 	var req ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate password complexity
+	if err := validation.ValidatePasswordWithDefault(req.NewPassword); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

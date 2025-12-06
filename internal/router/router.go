@@ -28,6 +28,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.StrictTransportSecurity(31536000))
 	r.Use(middleware.PathPrefix(cfg.Server.PathPrefix))
+	r.Use(middleware.DefaultBodyLimit()) // 1MB request body limit
 
 	// Initialize CSRF store for token management
 	csrfStore := middleware.NewCSRFStore()
