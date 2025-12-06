@@ -28,9 +28,11 @@ func (h *VersionHandler) CheckUpdate(c *gin.Context) {
 	release, err := upgrade.CheckLatestVersion()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
-			"current":          version.Version,
-			"latest":           "",
+			"current_version":  version.Version,
+			"latest_version":   "",
 			"update_available": false,
+			"release_url":      "",
+			"release_notes":    "",
 			"error":            err.Error(),
 		})
 		return
@@ -39,9 +41,10 @@ func (h *VersionHandler) CheckUpdate(c *gin.Context) {
 	needsUpgrade := upgrade.NeedsUpgrade(release.TagName)
 
 	c.JSON(http.StatusOK, gin.H{
-		"current":          version.Version,
-		"latest":           release.TagName,
+		"current_version":  version.Version,
+		"latest_version":   release.TagName,
 		"update_available": needsUpgrade,
-		"release_name":     release.Name,
+		"release_url":      release.HTMLURL,
+		"release_notes":    release.Body,
 	})
 }
