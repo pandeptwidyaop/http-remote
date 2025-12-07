@@ -1,6 +1,6 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Lock, Shield, Terminal, Server, ArrowRight } from 'lucide-react';
+import { User, Lock, Shield, Terminal, Server, ArrowRight, Github } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import Button from '@/components/ui/Button';
 
@@ -199,10 +199,21 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Footer text */}
-        <p className="text-center text-gray-500 text-sm mt-6">
-          Secure access to your deployment infrastructure
-        </p>
+        {/* Footer text with GitHub link */}
+        <div className="text-center mt-6 space-y-2">
+          <p className="text-gray-500 text-sm">
+            Secure access to your deployment infrastructure
+          </p>
+          <a
+            href="https://github.com/pandeptwidyaop/http-remote"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-gray-400 hover:text-white text-sm transition-colors duration-300"
+          >
+            <Github className="w-4 h-4" />
+            <span>View on GitHub</span>
+          </a>
+        </div>
       </div>
     </div>
   );
