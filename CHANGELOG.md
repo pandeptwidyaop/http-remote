@@ -1,3 +1,10 @@
+# [2.4.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.3.0...v2.4.0) (2025-12-07)
+
+
+### Features
+
+* **ui:** add GitHub project link to login page and footer ([2c23aa2](https://github.com/pandeptwidyaop/http-remote/commit/2c23aa2410d7f71d635516889fe9e71074ef273c))
+
 # [2.3.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.2.0...v2.3.0) (2025-12-07)
 
 
