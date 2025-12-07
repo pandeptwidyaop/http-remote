@@ -1,3 +1,10 @@
+# [2.5.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.4.2...v2.5.0) (2025-12-07)
+
+
+### Features
+
+* improve 2FA UI, file browser, and upgrade handling ([f71ce59](https://github.com/pandeptwidyaop/http-remote/commit/f71ce59eab7ac2c38e0692e4fd1508c09dd8411f))
+
 ## [2.4.2](https://github.com/pandeptwidyaop/http-remote/compare/v2.4.1...v2.4.2) (2025-12-07)
 
 
