@@ -1,3 +1,11 @@
+## [1.12.1](https://github.com/pandeptwidyaop/http-remote/compare/v1.12.0...v1.12.1) (2025-12-07)
+
+
+### Bug Fixes
+
+* resolve all golangci-lint issues (130 issues fixed) ([e13b001](https://github.com/pandeptwidyaop/http-remote/commit/e13b0013579acf6aa99daea0a94dc333a08a77b2))
+* update golangci-lint config for v2.5.0 compatibility ([1744719](https://github.com/pandeptwidyaop/http-remote/commit/17447196037c539512f8394e27ca94bed0d8ccdd))
+
 # [1.12.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.11.0...v1.12.0) (2025-12-06)
 
 
