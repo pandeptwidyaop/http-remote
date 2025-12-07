@@ -34,5 +34,5 @@ node_modules/
 /playwright/.cache/
 /playwright/.auth/
 
-# Screenshots
-screenshots/
+# Screenshots (test-generated only)
+# screenshots/  # Intentionally not ignored - README uses these

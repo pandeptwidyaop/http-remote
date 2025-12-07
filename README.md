@@ -1080,18 +1080,45 @@ xdg-open coverage.html
 
 ## Screenshots
 
-Screenshots tersedia di folder [docs/screenshots/](docs/screenshots/).
+### Login
+Modern glassmorphism login page with animated gradient background.
+![Login](screenshots/01-login.png)
 
-<!-- Uncomment dan sesuaikan setelah menambahkan screenshot
 ### Dashboard
-![Dashboard](docs/screenshots/dashboard.png)
+Overview of deployment statistics and recent activity.
+![Dashboard](screenshots/02-dashboard.png)
+
+### Apps Management
+Manage applications with deployment tokens for CI/CD integration.
+![Apps](screenshots/03-apps.png)
+
+### Commands
+Configure deployment commands with shell scripts.
+![Commands](screenshots/04-commands.png)
+
+### Execution History
+Track all command executions with status and output.
+![History](screenshots/05-history.png)
 
 ### Terminal
-![Terminal](docs/screenshots/terminal.png)
+Interactive WebSocket-based terminal with full PTY support.
+![Terminal](screenshots/06-terminal.png)
 
-### App Management
-![App Management](docs/screenshots/app-management.png)
--->
+### File Browser
+Browse and manage server files securely.
+![Files](screenshots/07-files.png)
+
+### Audit Logs
+Track all user actions for security compliance.
+![Audit Logs](screenshots/10-audit-logs.png)
+
+### Settings
+Configure account settings and enable Two-Factor Authentication.
+![Settings](screenshots/11-settings.png)
+
+### Two-Factor Authentication Setup
+Enable 2FA with QR code for authenticator apps.
+![2FA Setup](screenshots/12-2fa-setup.png)
 
 ---
 
