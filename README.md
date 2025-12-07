@@ -99,7 +99,7 @@ execution:
 
 admin:
   username: "admin"
-  password: "changeme"  # If left as "changeme", a secure random password will be generated on first run
+  password: "your-secure-password"  # REQUIRED: Must NOT be "changeme"
 
 terminal:
   shell: "/bin/bash"    # Shell to use (default: /bin/bash)
@@ -107,7 +107,31 @@ terminal:
   env:                  # Additional environment variables
     - "SUDO_ASKPASS=/usr/bin/ssh-askpass"
   # enabled: true       # Set to false to disable terminal feature
+
+# Security settings (REQUIRED)
+security:
+  # 32-byte encryption key for TOTP secrets (64 hex characters)
+  # Generate with: openssl rand -hex 32
+  encryption_key: "your-64-char-hex-key-here"
+
+  # Account lockout settings (brute force protection)
+  max_login_attempts: 5    # Lock after 5 failed attempts (default: 5)
+  lockout_duration: "15m"  # Lock for 15 minutes (default: 15m)
 ```
+
+### Required Configuration
+
+⚠️ **IMPORTANT**: The following configuration values are **required** for the application to start:
+
+1. **`admin.password`**: Must be changed from "changeme" to a secure password
+2. **`security.encryption_key`**: Must be set to a 64-character hex string (32 bytes)
+
+Generate an encryption key with:
+```bash
+openssl rand -hex 32
+```
+
+The application will refuse to start if these requirements are not met.
 
 ### Nginx Reverse Proxy Configuration
 
@@ -188,21 +212,31 @@ server {
 
 ## Quick Start
 
-### 1. Akses Web UI
+### 1. Setup Configuration
+
+Before running, create your `config.yaml` with required settings:
+
+```bash
+# Generate encryption key
+ENCRYPTION_KEY=$(openssl rand -hex 32)
+echo "Your encryption key: $ENCRYPTION_KEY"
+```
+
+### 2. Akses Web UI
 
 Buka browser ke `http://localhost:8080/devops/`
 
 Login dengan:
 - Username: `admin`
-- Password: `changeme`
+- Password: (password yang Anda set di config.yaml)
 
-### 2. Buat App
+### 3. Buat App
 
 Klik "New App" dan isi:
 - **Name**: Nama aplikasi (e.g., `my-webapp`)
 - **Working Directory**: Path ke aplikasi (e.g., `/opt/apps/my-webapp`)
 
-### 3. Buat Command
+### 4. Buat Command
 
 Pada halaman app, klik "New Command" dan isi:
 - **Name**: Nama command (e.g., `deploy`)
@@ -214,11 +248,11 @@ Contoh command:
 git pull origin main && docker-compose up -d --build
 ```
 
-### 4. Execute
+### 5. Execute
 
 Klik "Execute" pada command untuk menjalankannya. Output akan ditampilkan secara real-time.
 
-### 5. Enable Two-Factor Authentication (Optional)
+### 6. Enable Two-Factor Authentication (Optional)
 
 1. Navigate to **Settings** page
 2. Click "Enable 2FA"
@@ -226,7 +260,7 @@ Klik "Execute" pada command untuk menjalankannya. Output akan ditampilkan secara
 4. Enter 6-digit code to verify
 5. Save backup codes securely for account recovery
 
-### 6. Remote Terminal Access
+### 7. Remote Terminal Access
 
 1. Navigate to **Terminal** page in the navigation menu
 2. Interactive shell session will open automatically
@@ -923,9 +957,10 @@ HTTP Remote implements multiple security layers to protect your deployment infra
 - **Bcrypt Password Hashing**: Cost factor 12 (configurable)
 - **Secure Session Cookies**: HttpOnly flag enabled, Secure flag configurable
 - **Session Regeneration**: Automatic session invalidation on login to prevent session fixation
-- **Auto-generated Passwords**: If default password "changeme" is detected, a secure random password is generated automatically
+- **Required Secure Password**: Application refuses to start with default password "changeme"
+- **Timing-Safe Login**: Constant-time credential verification prevents username enumeration
 - **Two-Factor Authentication (2FA/TOTP)**: Optional TOTP-based 2FA using authenticator apps (Google Authenticator, Authy, etc.)
-- **Encrypted TOTP Secrets**: TOTP secrets encrypted at rest using AES-256-GCM
+- **Encrypted TOTP Secrets**: TOTP secrets encrypted at rest using AES-256-GCM (required encryption key)
 - **Backup Codes**: Encrypted recovery codes for 2FA account recovery
 
 ### Rate Limiting
@@ -948,6 +983,13 @@ Rate limit headers included in responses:
 - **Constant-time Comparison**: Prevents timing attacks on token validation
 - **UUID v4 Tokens**: Cryptographically random, non-predictable tokens
 
+### File System Security
+
+- **Path Traversal Protection**: All file paths validated using `filepath.EvalSymlinks()` to prevent symlink attacks
+- **System Path Protection**: Critical system directories (`/bin`, `/etc`, `/usr`, etc.) are protected from modification
+- **Filename Sanitization**: Uploaded file names are sanitized to remove dangerous characters and patterns
+- **Command Output Limits**: Execution output is truncated at configurable limit (default 10MB) to prevent memory exhaustion
+
 ### Audit Logging
 
 All sensitive operations are logged to `audit_logs` table:
@@ -958,17 +1000,21 @@ All sensitive operations are logged to `audit_logs` table:
 
 ### Production Deployment Recommendations
 
-1. **Enable Secure Cookies**:
+1. **Configure Required Security Settings**:
+   ```yaml
+   admin:
+     password: "your-secure-password"  # REQUIRED: Cannot be "changeme"
+   security:
+     encryption_key: "your-64-char-hex-key"  # REQUIRED: Generate with openssl rand -hex 32
+   ```
+
+2. **Enable Secure Cookies**:
    ```yaml
    server:
      secure_cookie: true  # Requires HTTPS
    ```
 
-2. **Use HTTPS**: Deploy behind reverse proxy (Traefik, Nginx, Caddy) with TLS
-
-3. **Change Default Credentials**: Either:
-   - Set a strong password in config
-   - Leave as "changeme" to auto-generate (password shown in logs on first run)
+3. **Use HTTPS**: Deploy behind reverse proxy (Traefik, Nginx, Caddy) with TLS
 
 4. **Firewall Rules**: Limit access to trusted IPs if possible
 
@@ -981,6 +1027,57 @@ All sensitive operations are logged to `audit_logs` table:
 ⚠️ **Working Directory**: Ensure working directories have appropriate permissions. Service should run as non-root user with limited privileges.
 
 ⚠️ **Database Backup**: SQLite database contains tokens and audit logs. Backup securely.
+
+---
+
+## Code Coverage
+
+[![codecov](https://codecov.io/gh/pandeptwidyaop/http-remote/branch/main/graph/badge.svg)](https://codecov.io/gh/pandeptwidyaop/http-remote)
+
+Code coverage dijalankan otomatis pada setiap push ke branch `main` dan `develop`, serta pada setiap pull request.
+
+### Menjalankan Coverage Secara Lokal
+
+```bash
+# Menjalankan test dengan coverage
+make test-ci
+
+# Atau dengan output HTML untuk detail coverage
+make test-coverage
+```
+
+Hasil coverage akan disimpan di:
+- `coverage.out` - Format Go coverage (untuk CI/Codecov)
+- `coverage.html` - Format HTML untuk dilihat di browser
+
+### Melihat Coverage Report
+
+Setelah menjalankan `make test-coverage`, buka file `coverage.html` di browser:
+
+```bash
+# macOS
+open coverage.html
+
+# Linux
+xdg-open coverage.html
+```
+
+---
+
+## Screenshots
+
+Screenshots tersedia di folder [docs/screenshots/](docs/screenshots/).
+
+<!-- Uncomment dan sesuaikan setelah menambahkan screenshot
+### Dashboard
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Terminal
+![Terminal](docs/screenshots/terminal.png)
+
+### App Management
+![App Management](docs/screenshots/app-management.png)
+-->
 
 ---
 

@@ -102,9 +102,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// First, verify username and password
-	user, err := h.authService.GetUserByUsername(req.Username)
-	if err != nil || !h.authService.CheckPassword(req.Password, user.PasswordHash) {
+	// Verify credentials using timing-safe comparison
+	// This prevents username enumeration via timing attacks
+	user, valid := h.authService.VerifyCredentials(req.Username, req.Password)
+	if !valid {
 		// Record failed login attempt
 		_ = h.authService.RecordLoginAttempt(req.Username, c.ClientIP(), false)
 

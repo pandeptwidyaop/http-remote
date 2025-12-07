@@ -230,16 +230,17 @@ func (s *ExecutorService) Execute(executionID string) error {
 
 	var output string
 	var outputMu sync.Mutex
+	var outputLimitExceeded bool
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		s.streamOutput(executionID, stdout, &output, &outputMu)
+		s.streamOutput(executionID, stdout, &output, &outputMu, &outputLimitExceeded)
 	}()
 	go func() {
 		defer wg.Done()
-		s.streamOutput(executionID, stderr, &output, &outputMu)
+		s.streamOutput(executionID, stderr, &output, &outputMu, &outputLimitExceeded)
 	}()
 
 	err = cmd.Wait()
@@ -264,20 +265,42 @@ func (s *ExecutorService) Execute(executionID string) error {
 	s.finishExecution(executionID, status, finalOutput, exitCode)
 	s.broadcastComplete(executionID, exitCode, status)
 
-	log.Printf("[Executor] Finished execution %s with status=%s, exit_code=%d", executionID, status, exitCode)
+	if outputLimitExceeded {
+		log.Printf("[Executor] Finished execution %s with status=%s, exit_code=%d (output truncated at %d bytes)", executionID, status, exitCode, s.cfg.Execution.MaxOutputSize)
+	} else {
+		log.Printf("[Executor] Finished execution %s with status=%s, exit_code=%d", executionID, status, exitCode)
+	}
 
 	return nil
 }
 
-func (s *ExecutorService) streamOutput(executionID string, r io.Reader, output *string, mu *sync.Mutex) {
+func (s *ExecutorService) streamOutput(executionID string, r io.Reader, output *string, mu *sync.Mutex, outputLimitExceeded *bool) {
 	scanner := bufio.NewScanner(r)
+	maxSize := s.cfg.Execution.MaxOutputSize
+
 	for scanner.Scan() {
 		line := scanner.Text()
 
 		mu.Lock()
-		*output += line + "\n"
+		currentLen := len(*output)
+		if currentLen < maxSize {
+			// Check if adding this line would exceed the limit
+			newLine := line + "\n"
+			if currentLen+len(newLine) > maxSize {
+				// Truncate the line to fit exactly
+				remaining := maxSize - currentLen
+				if remaining > 0 {
+					*output += newLine[:remaining]
+				}
+				*output += "\n... [OUTPUT TRUNCATED - exceeded max_output_size limit]\n"
+				*outputLimitExceeded = true
+			} else {
+				*output += newLine
+			}
+		}
 		mu.Unlock()
 
+		// Always broadcast to live subscribers even if output is truncated
 		s.broadcastLine(executionID, line)
 	}
 }

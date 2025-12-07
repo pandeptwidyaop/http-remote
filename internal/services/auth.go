@@ -40,6 +40,12 @@ const (
 	PasswordHistoryLimit = 5 // Number of previous passwords to remember
 )
 
+// dummyPasswordHash is a bcrypt hash used for timing-safe user enumeration protection.
+// This hash is checked when the user doesn't exist to prevent timing attacks.
+// The hash is for the password "dummy_password_for_timing_attack_prevention" with cost 12.
+// #nosec G101 - not a credential, intentional dummy hash for timing attack prevention
+const dummyPasswordHash = "$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4qhJkKLFf7DM.HCS"
+
 // AuthService handles user authentication and session management.
 type AuthService struct {
 	db     *database.DB
@@ -62,6 +68,33 @@ func (s *AuthService) HashPassword(password string) (string, error) {
 func (s *AuthService) CheckPassword(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
+}
+
+// VerifyCredentials performs timing-safe credential verification.
+// It always performs a password hash comparison even if the user doesn't exist,
+// preventing timing attacks that could reveal valid usernames.
+func (s *AuthService) VerifyCredentials(username, password string) (*models.User, bool) {
+	user, err := s.GetUserByUsername(username)
+
+	// Always perform a password comparison, even if user doesn't exist
+	// This prevents timing attacks from revealing valid usernames
+	var hashToCheck string
+	if err != nil || user == nil {
+		// User doesn't exist - use dummy hash to maintain consistent timing
+		hashToCheck = dummyPasswordHash
+	} else {
+		hashToCheck = user.PasswordHash
+	}
+
+	// This comparison takes constant time regardless of whether user exists
+	passwordValid := s.CheckPassword(password, hashToCheck)
+
+	// Only return user if both user exists AND password is valid
+	if err != nil || user == nil || !passwordValid {
+		return nil, false
+	}
+
+	return user, true
 }
 
 // CreateUser creates a new user with a hashed password.

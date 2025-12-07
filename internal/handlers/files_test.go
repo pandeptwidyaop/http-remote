@@ -21,6 +21,22 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
+// resolvePath resolves symlinks in a path (needed for macOS where /tmp -> /private/tmp)
+// If the file doesn't exist, it resolves the parent directory and joins with the filename
+func resolvePath(path string) string {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		// File might not exist (e.g., after deletion), try resolving parent
+		parentDir := filepath.Dir(path)
+		resolvedParent, parentErr := filepath.EvalSymlinks(parentDir)
+		if parentErr != nil {
+			return path
+		}
+		return filepath.Join(resolvedParent, filepath.Base(path))
+	}
+	return resolved
+}
+
 func setupFileHandlerTest(t *testing.T) (*services.AuditService, *gin.Engine, func()) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -270,8 +286,9 @@ func TestFileHandler_SaveFile(t *testing.T) {
 	}
 
 	found := false
+	resolvedFilePath := resolvePath(filePath)
 	for _, log := range logs {
-		if log.Action == "save" && log.ResourceID == filePath {
+		if log.Action == "save" && log.ResourceID == resolvedFilePath {
 			found = true
 			break
 		}
@@ -313,8 +330,9 @@ func TestFileHandler_DeleteFile(t *testing.T) {
 	}
 
 	found := false
+	resolvedFilePath := resolvePath(filePath)
 	for _, log := range logs {
-		if log.Action == "delete" && log.ResourceID == filePath {
+		if log.Action == "delete" && log.ResourceID == resolvedFilePath {
 			found = true
 			break
 		}
@@ -383,8 +401,9 @@ func TestFileHandler_RenameFile(t *testing.T) {
 	}
 
 	found := false
+	resolvedNewPath := resolvePath(newPath)
 	for _, log := range logs {
-		if log.Action == "rename" && log.ResourceID == newPath {
+		if log.Action == "rename" && log.ResourceID == resolvedNewPath {
 			found = true
 			break
 		}
@@ -441,8 +460,9 @@ func TestFileHandler_CopyFile(t *testing.T) {
 	}
 
 	found := false
+	resolvedDestPath := resolvePath(destPath)
 	for _, log := range logs {
-		if log.Action == "copy" && log.ResourceID == destPath {
+		if log.Action == "copy" && log.ResourceID == resolvedDestPath {
 			found = true
 			break
 		}
@@ -495,8 +515,9 @@ func TestFileHandler_UploadFile(t *testing.T) {
 	}
 
 	found := false
+	resolvedUploadedPath := resolvePath(uploadedPath)
 	for _, log := range logs {
-		if log.Action == "upload" && log.ResourceID == uploadedPath {
+		if log.Action == "upload" && log.ResourceID == resolvedUploadedPath {
 			found = true
 			break
 		}
@@ -542,8 +563,9 @@ func TestFileHandler_DownloadFile(t *testing.T) {
 	}
 
 	found := false
+	resolvedFilePath := resolvePath(tempFile.Name())
 	for _, log := range logs {
-		if log.Action == "download" && log.ResourceID == tempFile.Name() {
+		if log.Action == "download" && log.ResourceID == resolvedFilePath {
 			found = true
 			break
 		}
