@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.21', '1.22']
+        go-version: ['1.24']
 
     steps:
       - name: Checkout code
@@ -55,7 +55,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
-        if: matrix.go-version == '1.21'
+        if: matrix.go-version == '1.24'
         with:
           file: ./coverage.out
           flags: unittests
@@ -89,7 +89,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.24'
           cache: true
 
       - name: Build
@@ -125,7 +125,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.24'
           cache: true
 
       - name: golangci-lint
