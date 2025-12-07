@@ -71,7 +71,13 @@ func sanitizeFilename(filename string) string {
 
 // securePath validates and resolves a path to prevent path traversal attacks
 // Returns the resolved absolute path and any error
+// This is a package-level function for backward compatibility (uses default system paths only)
 func securePath(inputPath string) (string, error) {
+	return securePathWithConfig(inputPath, nil, nil)
+}
+
+// securePathWithConfig validates and resolves a path with configurable allowed/blocked paths
+func securePathWithConfig(inputPath string, allowedPaths, blockedPaths []string) (string, error) {
 	// Clean the path first
 	cleanPath := filepath.Clean(inputPath)
 
@@ -99,14 +105,47 @@ func securePath(inputPath string) (string, error) {
 		}
 	}
 
-	// Check against dangerous system paths
+	// Check against dangerous system paths (always enforced)
 	for _, dp := range dangerousPaths {
 		if realPath == dp {
 			return "", fmt.Errorf("access to system path %s is forbidden", dp)
 		}
 	}
 
+	// Check against additional blocked paths from config
+	for _, bp := range blockedPaths {
+		cleanBlocked := filepath.Clean(bp)
+		if realPath == cleanBlocked || strings.HasPrefix(realPath, cleanBlocked+"/") {
+			return "", fmt.Errorf("access to path %s is blocked by configuration", realPath)
+		}
+	}
+
+	// If allowed paths are configured, check whitelist
+	if len(allowedPaths) > 0 {
+		allowed := false
+		for _, ap := range allowedPaths {
+			cleanAllowed := filepath.Clean(ap)
+			if realPath == cleanAllowed || strings.HasPrefix(realPath, cleanAllowed+"/") {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return "", fmt.Errorf("access to path %s is not in allowed paths", realPath)
+		}
+	}
+
 	return realPath, nil
+}
+
+// validatePath is a helper method that uses the handler's config
+func (h *FileHandler) validatePath(inputPath string) (string, error) {
+	var allowedPaths, blockedPaths []string
+	if h.cfg != nil {
+		allowedPaths = h.cfg.Files.AllowedPaths
+		blockedPaths = h.cfg.Files.BlockedPaths
+	}
+	return securePathWithConfig(inputPath, allowedPaths, blockedPaths)
 }
 
 // FileInfo represents information about a file or directory
@@ -162,7 +201,7 @@ func (h *FileHandler) ListFiles(c *gin.Context) {
 	}
 
 	// Secure path validation (prevents symlink attacks)
-	path, err := securePath(path)
+	path, err := h.validatePath(path)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
@@ -251,7 +290,7 @@ func (h *FileHandler) ReadFile(c *gin.Context) {
 	}
 
 	// Secure path validation (prevents symlink attacks)
-	path, err := securePath(path)
+	path, err := h.validatePath(path)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
@@ -317,7 +356,7 @@ func (h *FileHandler) DownloadFile(c *gin.Context) {
 	}
 
 	// Secure path validation (prevents symlink attacks)
-	path, err := securePath(path)
+	path, err := h.validatePath(path)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
@@ -363,7 +402,7 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 	}
 
 	// Secure path validation (prevents symlink attacks)
-	targetPath, err := securePath(targetPath)
+	targetPath, err := h.validatePath(targetPath)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
@@ -451,7 +490,7 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 	}
 
 	// Secure path validation (prevents symlink attacks and system path access)
-	path, err := securePath(path)
+	path, err := h.validatePath(path)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
@@ -516,7 +555,7 @@ func (h *FileHandler) CreateDirectory(c *gin.Context) {
 	}
 
 	// Secure path validation (prevents symlink attacks and system path access)
-	path, err := securePath(req.Path)
+	path, err := h.validatePath(req.Path)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
@@ -565,7 +604,7 @@ func (h *FileHandler) SaveFile(c *gin.Context) {
 	}
 
 	// Secure path validation (prevents symlink attacks and system path access)
-	path, err := securePath(req.Path)
+	path, err := h.validatePath(req.Path)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
@@ -617,14 +656,14 @@ func (h *FileHandler) RenameFile(c *gin.Context) {
 	}
 
 	// Secure path validation for source (prevents symlink attacks)
-	oldPath, err := securePath(req.OldPath)
+	oldPath, err := h.validatePath(req.OldPath)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "source: " + err.Error()})
 		return
 	}
 
 	// Secure path validation for destination
-	newPath, err := securePath(req.NewPath)
+	newPath, err := h.validatePath(req.NewPath)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "destination: " + err.Error()})
 		return
@@ -694,14 +733,14 @@ func (h *FileHandler) CopyFile(c *gin.Context) {
 	}
 
 	// Secure path validation for source (prevents symlink attacks)
-	sourcePath, err := securePath(req.SourcePath)
+	sourcePath, err := h.validatePath(req.SourcePath)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "source: " + err.Error()})
 		return
 	}
 
 	// Secure path validation for destination
-	destPath, err := securePath(req.DestPath)
+	destPath, err := h.validatePath(req.DestPath)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "destination: " + err.Error()})
 		return

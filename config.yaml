@@ -20,7 +20,7 @@ execution:
 
 admin:
   username: "admin"
-  password: "changeme"
+  password: "admin"
 
 terminal:
   shell: "/bin/bash"
@@ -30,11 +30,24 @@ terminal:
   # enabled: true  # Set to false to disable terminal
 
 # Security settings
-# security:
-#   # 32-byte encryption key for TOTP secrets (64 hex characters)
-#   # Generate with: openssl rand -hex 32
-#   encryption_key: "your-64-char-hex-key-here"
+security:
+  # 32-byte encryption key for TOTP secrets (64 hex characters)
+  # Generate with: openssl rand -hex 32
+  encryption_key: "b78ed7e092d5b96eb537e1b2810b8ccf769f1a7dd3fbe400edde9b9750dc05a8"
 #
 #   # Account lockout settings (brute force protection)
 #   max_login_attempts: 5    # Lock after 5 failed attempts (default: 5)
 #   lockout_duration: "15m"  # Lock for 15 minutes (default: 15m)
+
+# File browser security settings (optional)
+# If allowed_paths is set, only those paths are accessible (whitelist mode)
+# blocked_paths adds additional restrictions on top of system paths
+# files:
+#   # Whitelist: Only allow access to these paths
+#   allowed_paths:
+#     - "/home/devops"
+#     - "/opt/apps"
+#   # Blacklist: Block access to these paths (in addition to system paths like /bin, /etc, /usr)
+#   blocked_paths:
+#     - "/home/devops/.ssh"
+#     - "/home/devops/.gnupg"

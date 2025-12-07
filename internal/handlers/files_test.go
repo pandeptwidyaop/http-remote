@@ -673,3 +673,233 @@ func TestAuditServiceDirect(t *testing.T) {
 		t.Errorf("expected action 'test_action', got '%s'", logs[0].Action)
 	}
 }
+
+// setupFileHandlerTestWithConfig creates a test setup with custom config
+func setupFileHandlerTestWithConfig(t *testing.T, cfg *config.Config) (*services.AuditService, *gin.Engine, func()) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+
+	db, err := database.New(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create database: %v", err)
+	}
+
+	if err := db.Migrate(); err != nil {
+		t.Fatalf("failed to migrate database: %v", err)
+	}
+
+	_, err = db.Exec(`INSERT INTO users (id, username, password_hash) VALUES (1, 'testuser', 'hash')`)
+	if err != nil {
+		t.Fatalf("failed to create test user: %v", err)
+	}
+
+	auditService := services.NewAuditService(db)
+	handler := handlers.NewFileHandler(cfg, auditService)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		user := &models.User{
+			ID:       1,
+			Username: "testuser",
+		}
+		c.Set(middleware.UserContextKey, user)
+		c.Next()
+	})
+
+	router.GET("/api/files", handler.ListFiles)
+	router.GET("/api/files/read", handler.ReadFile)
+	router.POST("/api/files/mkdir", handler.CreateDirectory)
+	router.POST("/api/files/save", handler.SaveFile)
+	router.DELETE("/api/files", handler.DeleteFile)
+
+	cleanup := func() {
+		_ = db.Close()
+	}
+
+	return auditService, router, cleanup
+}
+
+func TestFileHandler_AllowedPaths(t *testing.T) {
+	// Create temp directories
+	allowedDir, err := os.MkdirTemp("", "allowed_test")
+	if err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+	defer func(path string) { _ = os.RemoveAll(path) }(allowedDir)
+
+	notAllowedDir, err := os.MkdirTemp("", "notallowed_test")
+	if err != nil {
+		t.Fatalf("failed to create not allowed dir: %v", err)
+	}
+	defer func(path string) { _ = os.RemoveAll(path) }(notAllowedDir)
+
+	// Resolve symlinks (needed for macOS where /tmp -> /private/tmp)
+	allowedDir = resolvePath(allowedDir)
+	notAllowedDir = resolvePath(notAllowedDir)
+
+	cfg := &config.Config{
+		Files: config.FilesConfig{
+			AllowedPaths: []string{allowedDir},
+		},
+	}
+
+	_, router, cleanup := setupFileHandlerTestWithConfig(t, cfg)
+	defer cleanup()
+
+	// Test: Access to allowed path should work
+	t.Run("allowed path should work", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/files?path="+allowedDir, nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status 200 for allowed path, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	// Test: Access to not allowed path should fail
+	t.Run("not allowed path should fail", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/files?path="+notAllowedDir, nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected status 403 for not allowed path, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	// Test: Subpath of allowed path should work
+	t.Run("subpath of allowed path should work", func(t *testing.T) {
+		subDir := filepath.Join(allowedDir, "subdir")
+		err := os.Mkdir(subDir, 0755)
+		if err != nil {
+			t.Fatalf("failed to create subdir: %v", err)
+		}
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/files?path="+subDir, nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status 200 for subpath of allowed path, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestFileHandler_BlockedPaths(t *testing.T) {
+	// Create temp directories
+	blockedDir, err := os.MkdirTemp("", "blocked_test")
+	if err != nil {
+		t.Fatalf("failed to create blocked dir: %v", err)
+	}
+	defer func(path string) { _ = os.RemoveAll(path) }(blockedDir)
+
+	normalDir, err := os.MkdirTemp("", "normal_test")
+	if err != nil {
+		t.Fatalf("failed to create normal dir: %v", err)
+	}
+	defer func(path string) { _ = os.RemoveAll(path) }(normalDir)
+
+	// Resolve symlinks
+	blockedDir = resolvePath(blockedDir)
+	normalDir = resolvePath(normalDir)
+
+	cfg := &config.Config{
+		Files: config.FilesConfig{
+			BlockedPaths: []string{blockedDir},
+		},
+	}
+
+	_, router, cleanup := setupFileHandlerTestWithConfig(t, cfg)
+	defer cleanup()
+
+	// Test: Access to blocked path should fail
+	t.Run("blocked path should fail", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/files?path="+blockedDir, nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected status 403 for blocked path, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	// Test: Subpath of blocked path should also fail
+	t.Run("subpath of blocked path should fail", func(t *testing.T) {
+		subDir := filepath.Join(blockedDir, "subdir")
+		err := os.Mkdir(subDir, 0755)
+		if err != nil {
+			t.Fatalf("failed to create subdir: %v", err)
+		}
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/files?path="+subDir, nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected status 403 for subpath of blocked path, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	// Test: Access to normal (not blocked) path should work
+	t.Run("normal path should work", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/files?path="+normalDir, nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status 200 for normal path, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestFileHandler_AllowedAndBlockedPaths(t *testing.T) {
+	// Create temp directories
+	allowedDir, err := os.MkdirTemp("", "allowed_test")
+	if err != nil {
+		t.Fatalf("failed to create allowed dir: %v", err)
+	}
+	defer func(path string) { _ = os.RemoveAll(path) }(allowedDir)
+
+	// Resolve symlinks
+	allowedDir = resolvePath(allowedDir)
+
+	// Create a subdir that will be blocked
+	blockedSubDir := filepath.Join(allowedDir, "blocked")
+	err = os.Mkdir(blockedSubDir, 0755)
+	if err != nil {
+		t.Fatalf("failed to create blocked subdir: %v", err)
+	}
+
+	cfg := &config.Config{
+		Files: config.FilesConfig{
+			AllowedPaths: []string{allowedDir},
+			BlockedPaths: []string{blockedSubDir},
+		},
+	}
+
+	_, router, cleanup := setupFileHandlerTestWithConfig(t, cfg)
+	defer cleanup()
+
+	// Test: Access to allowed path should work
+	t.Run("allowed path should work", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/files?path="+allowedDir, nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status 200 for allowed path, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	// Test: Blocked subpath within allowed should fail
+	t.Run("blocked subpath within allowed should fail", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/files?path="+blockedSubDir, nil)
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected status 403 for blocked subpath, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}

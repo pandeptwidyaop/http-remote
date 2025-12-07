@@ -17,6 +17,13 @@ type Config struct {
 	Execution ExecutionConfig `yaml:"execution"`
 	Terminal  TerminalConfig  `yaml:"terminal"`
 	Security  SecurityConfig  `yaml:"security"`
+	Files     FilesConfig     `yaml:"files"`
+}
+
+// FilesConfig holds file browser security configuration.
+type FilesConfig struct {
+	AllowedPaths []string `yaml:"allowed_paths"` // Whitelist of allowed paths (if set, only these paths are accessible)
+	BlockedPaths []string `yaml:"blocked_paths"` // Blacklist of blocked paths (in addition to system paths)
 }
 
 // TerminalConfig holds terminal/PTY configuration.
