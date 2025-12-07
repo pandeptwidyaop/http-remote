@@ -8,8 +8,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/pandeptwidyaop/http-remote/internal/version"
 )
@@ -18,6 +21,7 @@ const (
 	githubRepo   = "pandeptwidyaop/http-remote"
 	githubAPI    = "https://api.github.com/repos/" + githubRepo + "/releases/latest"
 	downloadBase = "https://github.com/" + githubRepo + "/releases/download"
+	maxBackups   = 3 // Maximum number of backup versions to keep
 )
 
 // GitHubRelease represents a GitHub release with its metadata.
@@ -30,6 +34,22 @@ type GitHubRelease struct {
 		Name               string `json:"name"`
 		BrowserDownloadURL string `json:"browser_download_url"`
 	} `json:"assets"`
+}
+
+// BackupInfo represents information about a backup version.
+type BackupInfo struct {
+	Path      string    `json:"path"`
+	Version   string    `json:"version"`
+	Timestamp time.Time `json:"timestamp"`
+	Size      int64     `json:"size"`
+}
+
+// UpgradeProgress represents progress information during upgrade.
+type UpgradeProgress struct {
+	Stage      string `json:"stage"`       // "checking", "downloading", "installing", "complete", "error"
+	Percent    int    `json:"percent"`     // 0-100
+	Message    string `json:"message"`     // Human-readable message
+	NewVersion string `json:"new_version"` // Version being installed
 }
 
 // CheckLatestVersion checks GitHub for the latest release version
@@ -192,29 +212,210 @@ func Install(tmpPath string) error {
 		return fmt.Errorf("failed to resolve executable path: %w", err)
 	}
 
-	// Backup current binary
-	backupPath := execPath + ".backup"
-	if err := os.Rename(execPath, backupPath); err != nil {
+	// Create versioned backup with timestamp
+	backupPath := fmt.Sprintf("%s.backup.%s.%s", execPath, version.Version, time.Now().Format("20060102150405"))
+	if err := copyFile(execPath, backupPath); err != nil {
 		return fmt.Errorf("failed to backup current binary: %w", err)
+	}
+
+	// Rotate old backups (keep only maxBackups)
+	if err := rotateBackups(execPath); err != nil {
+		// Non-fatal, just log
+		fmt.Printf("Warning: failed to rotate backups: %v\n", err)
+	}
+
+	// Remove current binary
+	if err := os.Remove(execPath); err != nil {
+		return fmt.Errorf("failed to remove current binary: %w", err)
 	}
 
 	// Move new binary to executable path
 	if err := os.Rename(tmpPath, execPath); err != nil {
-		// Try to restore backup
-		_ = os.Rename(backupPath, execPath)
+		// Try to restore from backup
+		_ = copyFile(backupPath, execPath)
 		return fmt.Errorf("failed to install new binary: %w", err)
 	}
 
 	// Make executable
 	// #nosec G302 - executable needs to be executable by owner and group
 	if err := os.Chmod(execPath, 0755); err != nil {
-		// Try to restore backup
-		_ = os.Rename(backupPath, execPath)
+		// Try to restore from backup
+		_ = copyFile(backupPath, execPath)
 		return fmt.Errorf("failed to set permissions: %w", err)
 	}
 
-	// Remove backup
-	_ = os.Remove(backupPath)
+	return nil
+}
+
+// copyFile copies a file from src to dst
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	if _, err := io.Copy(destFile, sourceFile); err != nil {
+		return err
+	}
+
+	// Copy permissions
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	return os.Chmod(dst, srcInfo.Mode())
+}
+
+// rotateBackups removes old backups, keeping only the most recent maxBackups
+func rotateBackups(execPath string) error {
+	backups, err := ListBackups()
+	if err != nil {
+		return err
+	}
+
+	if len(backups) <= maxBackups {
+		return nil
+	}
+
+	// Sort by timestamp, newest first
+	sort.Slice(backups, func(i, j int) bool {
+		return backups[i].Timestamp.After(backups[j].Timestamp)
+	})
+
+	// Remove older backups
+	for i := maxBackups; i < len(backups); i++ {
+		if err := os.Remove(backups[i].Path); err != nil {
+			fmt.Printf("Warning: failed to remove old backup %s: %v\n", backups[i].Path, err)
+		}
+	}
+
+	return nil
+}
+
+// ListBackups returns all available backup versions
+func ListBackups() ([]BackupInfo, error) {
+	execPath, err := os.Executable()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get executable path: %w", err)
+	}
+	execPath, err = filepath.EvalSymlinks(execPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve executable path: %w", err)
+	}
+
+	dir := filepath.Dir(execPath)
+	base := filepath.Base(execPath)
+
+	// Pattern: http-remote.backup.v1.2.3.20241207123456
+	pattern := regexp.MustCompile(`^` + regexp.QuoteMeta(base) + `\.backup\.(v[0-9]+\.[0-9]+\.[0-9]+)\.([0-9]{14})$`)
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read directory: %w", err)
+	}
+
+	var backups []BackupInfo
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		matches := pattern.FindStringSubmatch(entry.Name())
+		if matches == nil {
+			// Also check for simple .backup extension (legacy)
+			if entry.Name() == base+".backup" {
+				info, err := entry.Info()
+				if err != nil {
+					continue
+				}
+				backups = append(backups, BackupInfo{
+					Path:      filepath.Join(dir, entry.Name()),
+					Version:   "unknown",
+					Timestamp: info.ModTime(),
+					Size:      info.Size(),
+				})
+			}
+			continue
+		}
+
+		ver := matches[1]
+		tsStr := matches[2]
+
+		ts, err := time.Parse("20060102150405", tsStr)
+		if err != nil {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		backups = append(backups, BackupInfo{
+			Path:      filepath.Join(dir, entry.Name()),
+			Version:   ver,
+			Timestamp: ts,
+			Size:      info.Size(),
+		})
+	}
+
+	// Sort by timestamp, newest first
+	sort.Slice(backups, func(i, j int) bool {
+		return backups[i].Timestamp.After(backups[j].Timestamp)
+	})
+
+	return backups, nil
+}
+
+// Rollback restores a previous version from backup
+func Rollback(backupPath string) error {
+	// Get current executable path
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+	execPath, err = filepath.EvalSymlinks(execPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve executable path: %w", err)
+	}
+
+	// Verify backup exists
+	if _, err := os.Stat(backupPath); err != nil {
+		return fmt.Errorf("backup not found: %w", err)
+	}
+
+	// Create backup of current version before rollback
+	currentBackupPath := fmt.Sprintf("%s.backup.%s.%s", execPath, version.Version, time.Now().Format("20060102150405"))
+	if err := copyFile(execPath, currentBackupPath); err != nil {
+		return fmt.Errorf("failed to backup current binary before rollback: %w", err)
+	}
+
+	// Remove current binary
+	if err := os.Remove(execPath); err != nil {
+		return fmt.Errorf("failed to remove current binary: %w", err)
+	}
+
+	// Copy backup to executable path
+	if err := copyFile(backupPath, execPath); err != nil {
+		// Try to restore from our new backup
+		_ = copyFile(currentBackupPath, execPath)
+		return fmt.Errorf("failed to restore backup: %w", err)
+	}
+
+	// Make executable
+	if err := os.Chmod(execPath, 0755); err != nil {
+		return fmt.Errorf("failed to set permissions: %w", err)
+	}
+
+	// Rotate backups
+	_ = rotateBackups(execPath)
 
 	return nil
 }
@@ -266,4 +467,104 @@ func Run(force bool) error {
 	fmt.Println("Please restart the application to use the new version.")
 
 	return nil
+}
+
+// RunWithProgress performs the upgrade with progress callbacks for API use
+func RunWithProgress(force bool, progressFn func(UpgradeProgress)) (*GitHubRelease, error) {
+	progressFn(UpgradeProgress{
+		Stage:   "checking",
+		Percent: 0,
+		Message: "Checking for updates...",
+	})
+
+	release, err := CheckLatestVersion()
+	if err != nil {
+		progressFn(UpgradeProgress{
+			Stage:   "error",
+			Percent: 0,
+			Message: err.Error(),
+		})
+		return nil, err
+	}
+
+	progressFn(UpgradeProgress{
+		Stage:      "checking",
+		Percent:    10,
+		Message:    fmt.Sprintf("Latest version: %s", release.TagName),
+		NewVersion: release.TagName,
+	})
+
+	if !force && !NeedsUpgrade(release.TagName) {
+		progressFn(UpgradeProgress{
+			Stage:      "complete",
+			Percent:    100,
+			Message:    "Already running the latest version",
+			NewVersion: release.TagName,
+		})
+		return release, nil
+	}
+
+	assetURL, err := FindAssetURL(release)
+	if err != nil {
+		progressFn(UpgradeProgress{
+			Stage:   "error",
+			Percent: 10,
+			Message: err.Error(),
+		})
+		return nil, err
+	}
+
+	progressFn(UpgradeProgress{
+		Stage:      "downloading",
+		Percent:    15,
+		Message:    "Starting download...",
+		NewVersion: release.TagName,
+	})
+
+	tmpPath, err := Download(assetURL, func(downloaded, total int64) {
+		if total > 0 {
+			// Map download progress from 15% to 85%
+			pct := 15 + int(float64(downloaded)/float64(total)*70)
+			progressFn(UpgradeProgress{
+				Stage:      "downloading",
+				Percent:    pct,
+				Message:    fmt.Sprintf("Downloading: %d%%", int(float64(downloaded)/float64(total)*100)),
+				NewVersion: release.TagName,
+			})
+		}
+	})
+	if err != nil {
+		progressFn(UpgradeProgress{
+			Stage:   "error",
+			Percent: 50,
+			Message: err.Error(),
+		})
+		return nil, err
+	}
+
+	progressFn(UpgradeProgress{
+		Stage:      "installing",
+		Percent:    90,
+		Message:    "Installing new version...",
+		NewVersion: release.TagName,
+	})
+
+	if err := Install(tmpPath); err != nil {
+		_ = os.Remove(tmpPath)
+		progressFn(UpgradeProgress{
+			Stage:   "error",
+			Percent: 90,
+			Message: err.Error(),
+		})
+		return nil, err
+	}
+
+	progressFn(UpgradeProgress{
+		Stage:      "complete",
+		Percent:    100,
+		Message:    fmt.Sprintf("Successfully upgraded to %s! Restart required.", release.TagName),
+		NewVersion: release.TagName,
+	})
+
+	return release, nil
 }

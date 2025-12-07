@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Shield, Key, AlertCircle, Lock } from 'lucide-react';
+import { Shield, Key, AlertCircle, Lock, Server, Download, RotateCcw, RefreshCw } from 'lucide-react';
 import { api } from '@/api/client';
-import { API_ENDPOINTS } from '@/lib/config';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
@@ -15,6 +14,33 @@ interface TwoFAStatus {
 interface TwoFASecret {
   secret: string;
   qr_code_url: string;
+}
+
+interface SystemStatus {
+  platform: string;
+  arch: string;
+  is_linux: boolean;
+  is_systemd: boolean;
+  is_service: boolean;
+  service_status: string;
+  can_upgrade: boolean;
+  can_restart: boolean;
+  current_version: string;
+}
+
+interface BackupInfo {
+  path: string;
+  version: string;
+  timestamp: string;
+  size: number;
+}
+
+interface VersionCheck {
+  current_version: string;
+  latest_version: string;
+  update_available: boolean;
+  release_url: string;
+  release_notes: string;
 }
 
 export default function Settings() {
@@ -36,8 +62,21 @@ export default function Settings() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
+  // System management state
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+  const [versionInfo, setVersionInfo] = useState<VersionCheck | null>(null);
+  const [backups, setBackups] = useState<BackupInfo[]>([]);
+  const [upgrading, setUpgrading] = useState(false);
+  const [upgradeMessage, setUpgradeMessage] = useState('');
+  const [restarting, setRestarting] = useState(false);
+  const [systemError, setSystemError] = useState<string | null>(null);
+  const [isRestartModalOpen, setIsRestartModalOpen] = useState(false);
+  const [isRollbackModalOpen, setIsRollbackModalOpen] = useState(false);
+  const [selectedBackup, setSelectedBackup] = useState<string>('');
+
   useEffect(() => {
     fetchStatus();
+    fetchSystemStatus();
   }, []);
 
   const fetchStatus = async () => {
@@ -49,6 +88,21 @@ export default function Settings() {
       setStatus({ enabled: false, setup: false });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSystemStatus = async () => {
+    try {
+      const [sysStatus, verCheck, backupData] = await Promise.all([
+        api.get<SystemStatus>('/api/system/status'),
+        api.get<VersionCheck>('/api/version/check'),
+        api.get<{ backups: BackupInfo[]; current_version: string }>('/api/system/rollback-versions'),
+      ]);
+      setSystemStatus(sysStatus);
+      setVersionInfo(verCheck);
+      setBackups(backupData?.backups || []);
+    } catch (error) {
+      console.error('Failed to fetch system status:', error);
     }
   };
 
@@ -148,6 +202,76 @@ export default function Settings() {
     }
   };
 
+  const handleUpgrade = async () => {
+    setUpgrading(true);
+    setSystemError(null);
+    setUpgradeMessage('Starting upgrade...');
+
+    try {
+      const result = await api.post<{ success: boolean; new_version: string; message: string; need_restart: boolean }>('/api/system/upgrade');
+      setUpgradeMessage(result.message);
+      if (result.need_restart) {
+        setUpgradeMessage(`${result.message} Click "Restart Service" to apply changes.`);
+      }
+      await fetchSystemStatus();
+    } catch (error: any) {
+      setSystemError(error.message || 'Upgrade failed');
+      setUpgradeMessage('');
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
+  const handleRestart = async () => {
+    setRestarting(true);
+    setSystemError(null);
+    setIsRestartModalOpen(false);
+
+    try {
+      await api.post('/api/system/restart');
+      // Show reconnecting message and reload after delay
+      setUpgradeMessage('Service is restarting... Reconnecting in 5 seconds.');
+      setTimeout(() => {
+        window.location.reload();
+      }, 5000);
+    } catch (error: any) {
+      setSystemError(error.message || 'Restart failed');
+      setRestarting(false);
+    }
+  };
+
+  const handleRollback = async () => {
+    if (!selectedBackup) return;
+
+    setUpgrading(true);
+    setSystemError(null);
+    setIsRollbackModalOpen(false);
+
+    try {
+      const result = await api.post<{ success: boolean; version: string; message: string }>('/api/system/rollback', {
+        backup_path: selectedBackup,
+      });
+      setUpgradeMessage(result.message);
+      await fetchSystemStatus();
+    } catch (error: any) {
+      setSystemError(error.message || 'Rollback failed');
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleString();
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -161,8 +285,131 @@ export default function Settings() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-600 mt-1">Manage your account security settings</p>
+        <p className="text-gray-600 mt-1">Manage your account and system settings</p>
       </div>
+
+      {/* System Management */}
+      <Card className="p-6">
+        <div className="flex items-start space-x-4">
+          <div className="flex-shrink-0">
+            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+              <Server className="h-6 w-6 text-purple-600" />
+            </div>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-900">System Management</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Manage system upgrades, service control, and version rollback.
+            </p>
+
+            {/* Version Info */}
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Current Version</p>
+                  <p className="text-lg font-semibold text-gray-900">{systemStatus?.current_version || 'Unknown'}</p>
+                </div>
+                {versionInfo?.update_available && (
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600">Latest Version</p>
+                    <p className="text-lg font-semibold text-green-600">{versionInfo.latest_version}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Platform Info */}
+              <div className="mt-3 flex items-center space-x-4 text-sm text-gray-500">
+                <span>Platform: {systemStatus?.platform}/{systemStatus?.arch}</span>
+                <span>•</span>
+                <span>Service: {systemStatus?.service_status || 'Unknown'}</span>
+              </div>
+            </div>
+
+            {/* Warning for non-Linux */}
+            {systemStatus && !systemStatus.is_linux && (
+              <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                <div className="flex items-start space-x-3">
+                  <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-yellow-800">
+                    <p className="font-medium">Limited functionality on {systemStatus.platform}</p>
+                    <p className="mt-1">
+                      Upgrade and restart features are only available on Linux with systemd.
+                      Please manage the service manually on this platform.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Success/Error Messages */}
+            {upgradeMessage && (
+              <div className="mt-4 bg-green-50 border border-green-200 rounded-md p-4">
+                <p className="text-sm text-green-800">{upgradeMessage}</p>
+              </div>
+            )}
+
+            {systemError && (
+              <div className="mt-4 bg-red-50 border border-red-200 rounded-md p-4">
+                <p className="text-sm text-red-800">{systemError}</p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="mt-4 flex flex-wrap gap-3">
+              {/* Upgrade Button */}
+              {versionInfo?.update_available && systemStatus?.can_upgrade && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleUpgrade}
+                  loading={upgrading}
+                  disabled={restarting}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Upgrade to {versionInfo.latest_version}
+                </Button>
+              )}
+
+              {/* Restart Button */}
+              {systemStatus?.can_restart && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setIsRestartModalOpen(true)}
+                  disabled={upgrading || restarting}
+                  loading={restarting}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Restart Service
+                </Button>
+              )}
+
+              {/* Rollback Button */}
+              {backups.length > 0 && systemStatus?.is_linux && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedBackup(backups[0]?.path || '');
+                    setIsRollbackModalOpen(true);
+                  }}
+                  disabled={upgrading || restarting}
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Rollback
+                </Button>
+              )}
+            </div>
+
+            {/* No update available */}
+            {versionInfo && !versionInfo.update_available && systemStatus?.is_linux && (
+              <p className="mt-4 text-sm text-gray-500">
+                You are running the latest version.
+              </p>
+            )}
+          </div>
+        </div>
+      </Card>
 
       {/* Change Password */}
       <Card className="p-6">
@@ -267,6 +514,128 @@ export default function Settings() {
           </div>
         </div>
       </Card>
+
+      {/* Restart Confirmation Modal */}
+      <Modal
+        isOpen={isRestartModalOpen}
+        onClose={() => setIsRestartModalOpen(false)}
+        title="Restart Service"
+      >
+        <div className="space-y-4">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+            <div className="flex items-start space-x-3">
+              <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-yellow-800">
+                <p className="font-medium">Warning</p>
+                <p className="mt-1">
+                  This will restart the HTTP Remote service. The connection will be temporarily lost and the page will reload automatically.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end space-x-3 pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsRestartModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleRestart}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Restart Now
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Rollback Modal */}
+      <Modal
+        isOpen={isRollbackModalOpen}
+        onClose={() => setIsRollbackModalOpen(false)}
+        title="Rollback to Previous Version"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Select a backup version to rollback to. This will replace the current binary with the selected backup.
+          </p>
+
+          <div className="space-y-2">
+            {backups.map((backup) => (
+              <label
+                key={backup.path}
+                className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
+                  selectedBackup === backup.path
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="backup"
+                  value={backup.path}
+                  checked={selectedBackup === backup.path}
+                  onChange={(e) => setSelectedBackup(e.target.value)}
+                  className="sr-only"
+                />
+                <div className="flex-1">
+                  <p className="font-medium text-gray-900">{backup.version}</p>
+                  <p className="text-sm text-gray-500">
+                    {formatDate(backup.timestamp)} • {formatBytes(backup.size)}
+                  </p>
+                </div>
+                {selectedBackup === backup.path && (
+                  <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
+              </label>
+            ))}
+          </div>
+
+          {backups.length === 0 && (
+            <p className="text-sm text-gray-500 text-center py-4">
+              No backup versions available.
+            </p>
+          )}
+
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+            <div className="flex items-start space-x-3">
+              <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-yellow-800">
+                <p className="font-medium">Note</p>
+                <p className="mt-1">
+                  After rollback, you will need to restart the service for changes to take effect.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end space-x-3 pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsRollbackModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleRollback}
+              disabled={!selectedBackup}
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Rollback
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Setup 2FA Modal */}
       <Modal

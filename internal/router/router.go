@@ -84,6 +84,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	backupHandler := handlers.NewBackupHandler(appService, auditService)
 	fileHandler := handlers.NewFileHandler(cfg, auditService)
 	userHandler := handlers.NewUserHandler(authService, auditService, cfg)
+	systemHandler := handlers.NewSystemHandler(auditService)
 
 	// Rate limiters
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)   // 5 req/min for login
@@ -175,6 +176,13 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 			protected.PUT("/users/:id", userHandler.Update)
 			protected.PUT("/users/:id/password", userHandler.UpdatePassword)
 			protected.DELETE("/users/:id", userHandler.Delete)
+
+			// System management endpoints
+			protected.GET("/system/status", systemHandler.Status)
+			protected.POST("/system/upgrade", systemHandler.Upgrade)
+			protected.POST("/system/restart", systemHandler.Restart)
+			protected.GET("/system/rollback-versions", systemHandler.ListRollbackVersions)
+			protected.POST("/system/rollback", systemHandler.Rollback)
 		}
 	}
 

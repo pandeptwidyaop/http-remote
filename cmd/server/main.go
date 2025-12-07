@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/pandeptwidyaop/http-remote/internal/config"
 	"github.com/pandeptwidyaop/http-remote/internal/database"
 	"github.com/pandeptwidyaop/http-remote/internal/router"
+	"github.com/pandeptwidyaop/http-remote/internal/service"
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 	"github.com/pandeptwidyaop/http-remote/internal/upgrade"
 	"github.com/pandeptwidyaop/http-remote/internal/version"
@@ -35,6 +37,19 @@ func main() {
 			fmt.Printf("HTTP Remote %s\n", version.Version)
 			fmt.Printf("Build Time: %s\n", version.BuildTime)
 			fmt.Printf("Git Commit: %s\n", version.GitCommit)
+			os.Exit(0)
+		case "install-service":
+			runInstallService()
+			os.Exit(0)
+		case "uninstall-service":
+			runUninstallService()
+			os.Exit(0)
+		case "service":
+			if len(os.Args) > 2 {
+				runServiceCommand(os.Args[2])
+			} else {
+				fmt.Println("Usage: http-remote service <status|start|stop|restart>")
+			}
 			os.Exit(0)
 		}
 	}
@@ -136,5 +151,167 @@ func main() {
 
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
+	}
+}
+
+// runInstallService handles the install-service subcommand.
+func runInstallService() {
+	if !service.IsLinux() {
+		fmt.Println("Warning: Service installation is only supported on Linux with systemd.")
+		fmt.Println("On other platforms, please run the binary directly or use your OS's service manager.")
+		os.Exit(1)
+	}
+
+	if !service.IsSystemdAvailable() {
+		fmt.Println("Error: systemd is not available on this system.")
+		os.Exit(1)
+	}
+
+	if !service.IsRoot() {
+		fmt.Println("Error: This command requires root privileges.")
+		fmt.Println("Please run with sudo: sudo ./http-remote install-service")
+		os.Exit(1)
+	}
+
+	// Parse flags for install-service
+	fs := flag.NewFlagSet("install-service", flag.ExitOnError)
+	user := fs.String("user", "root", "User to run the service as")
+	configPath := fs.String("config", "/etc/http-remote/config.yaml", "Path to config file")
+	workDir := fs.String("workdir", "/etc/http-remote", "Working directory for the service")
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Get executable path
+	execPath, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting executable path: %v\n", err)
+		os.Exit(1)
+	}
+	execPath, err = filepath.EvalSymlinks(execPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error resolving executable path: %v\n", err)
+		os.Exit(1)
+	}
+
+	cfg := service.ServiceConfig{
+		ExecPath:   execPath,
+		ConfigPath: *configPath,
+		User:       *user,
+		WorkingDir: *workDir,
+	}
+
+	fmt.Println("Installing HTTP Remote as systemd service...")
+	fmt.Printf("  Binary: %s\n", cfg.ExecPath)
+	fmt.Printf("  Config: %s\n", cfg.ConfigPath)
+	fmt.Printf("  User: %s\n", cfg.User)
+	fmt.Printf("  Working Dir: %s\n", cfg.WorkingDir)
+
+	if err := service.Install(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "Error installing service: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("")
+	fmt.Println("Service installed and started successfully!")
+	fmt.Println("")
+	fmt.Println("Useful commands:")
+	fmt.Println("  sudo systemctl status http-remote   - Check service status")
+	fmt.Println("  sudo systemctl restart http-remote  - Restart service")
+	fmt.Println("  sudo journalctl -u http-remote -f   - View logs")
+}
+
+// runUninstallService handles the uninstall-service subcommand.
+func runUninstallService() {
+	if !service.IsLinux() {
+		fmt.Println("Warning: Service uninstallation is only supported on Linux with systemd.")
+		os.Exit(1)
+	}
+
+	if !service.IsSystemdAvailable() {
+		fmt.Println("Error: systemd is not available on this system.")
+		os.Exit(1)
+	}
+
+	if !service.IsRoot() {
+		fmt.Println("Error: This command requires root privileges.")
+		fmt.Println("Please run with sudo: sudo ./http-remote uninstall-service")
+		os.Exit(1)
+	}
+
+	fmt.Println("Uninstalling HTTP Remote systemd service...")
+
+	if err := service.Uninstall(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error uninstalling service: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Service uninstalled successfully!")
+}
+
+// runServiceCommand handles service management subcommands.
+func runServiceCommand(cmd string) {
+	if !service.IsLinux() {
+		fmt.Println("Warning: Service management is only supported on Linux with systemd.")
+		os.Exit(1)
+	}
+
+	if !service.IsSystemdAvailable() {
+		fmt.Println("Error: systemd is not available on this system.")
+		os.Exit(1)
+	}
+
+	switch cmd {
+	case "status":
+		status, err := service.Status()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting service status: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("HTTP Remote Service Status:")
+		fmt.Printf("  Installed: %v\n", status.IsInstalled)
+		fmt.Printf("  Enabled: %v\n", status.IsEnabled)
+		fmt.Printf("  Running: %v\n", status.IsRunning)
+		fmt.Printf("  State: %s (%s)\n", status.ActiveState, status.SubState)
+
+	case "start":
+		if !service.IsRoot() {
+			fmt.Println("Error: This command requires root privileges.")
+			os.Exit(1)
+		}
+		if err := service.Start(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error starting service: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Service started successfully!")
+
+	case "stop":
+		if !service.IsRoot() {
+			fmt.Println("Error: This command requires root privileges.")
+			os.Exit(1)
+		}
+		if err := service.Stop(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error stopping service: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Service stopped successfully!")
+
+	case "restart":
+		if !service.IsRoot() {
+			fmt.Println("Error: This command requires root privileges.")
+			os.Exit(1)
+		}
+		if err := service.Restart(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error restarting service: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Service restarted successfully!")
+
+	default:
+		fmt.Printf("Unknown service command: %s\n", cmd)
+		fmt.Println("Usage: http-remote service <status|start|stop|restart>")
+		os.Exit(1)
 	}
 }
