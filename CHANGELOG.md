@@ -1,3 +1,10 @@
+## [2.4.1](https://github.com/pandeptwidyaop/http-remote/compare/v2.4.0...v2.4.1) (2025-12-07)
+
+
+### Bug Fixes
+
+* resolve linter errors in files handler and config tests ([8fe39bf](https://github.com/pandeptwidyaop/http-remote/commit/8fe39bf7835e36f12f192631389e30f5fa7c3c2c))
+
 # [2.4.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.3.0...v2.4.0) (2025-12-07)
 
 
