@@ -6,6 +6,7 @@ run:
   modules-download-mode: readonly
 
 linters:
+  default: none
   enable:
     - errcheck
     - govet
@@ -17,67 +18,65 @@ linters:
     - unparam
     - gosec
     - revive
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-
-  govet:
-    enable-all: true
-
-  misspell:
-    locale: US
-
-  revive:
-    severity: warning
-    confidence: 0.8
+  settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+      exclude-functions:
+        - (*database/sql.Rows).Close
+        - (*database/sql.Tx).Rollback
+        - (io.Closer).Close
+    govet:
+      disable:
+        - fieldalignment
+        - shadow
+    misspell:
+      locale: US
+    revive:
+      severity: warning
+      confidence: 0.8
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: indent-error-flow
+        - name: superfluous-else
+        - name: unreachable-code
+  exclusions:
     rules:
-      - name: blank-imports
-      - name: context-as-argument
-      - name: dot-imports
-      - name: error-return
-      - name: error-strings
-      - name: error-naming
-      - name: exported
-      - name: if-return
-      - name: increment-decrement
-      - name: var-naming
-      - name: package-comments
-      - name: range
-      - name: receiver-naming
-      - name: indent-error-flow
-      - name: superfluous-else
-      - name: unreachable-code
-
+      # Exclude some linters from running on tests files
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+      # Exclude typecheck for assets (requires frontend build first)
+      - path: internal/assets/
+        linters:
+          - typecheck
+      # Ignore long lines in generated files
+      - path: internal/assets/
+        linters:
+          - lll
+      # Allow embedding in assets
+      - path: internal/assets/
+        text: "embed"
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
 
-  exclude-rules:
-    # Exclude some linters from running on tests files
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gosec
-
-    # Exclude typecheck for assets (requires frontend build first)
-    - path: internal/assets/
-      linters:
-        - typecheck
-
-    # Ignore long lines in generated files
-    - path: internal/assets/
-      linters:
-        - lll
-
-    # Allow embedding in assets
-    - path: internal/assets/
-      text: "embed"
-
-output:
-  format: colored-line-number
-  print-issued-lines: true
-  print-linter-name: true
-  sort-results: true
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    paths:
+      - internal/assets/

@@ -5,6 +5,7 @@ import (
 	"embed"
 )
 
-//go:embed web/dist
 // EmbeddedFiles contains the embedded web UI assets (HTML, CSS, JS).
+//
+//go:embed web/dist
 var EmbeddedFiles embed.FS

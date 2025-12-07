@@ -90,7 +90,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 		if c.GetHeader("Content-Type") == "application/json" {
 			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error":             "account temporarily locked",
+				"error":               "account temporarily locked",
 				"retry_after_seconds": int(remaining.Seconds()),
 			})
 			return

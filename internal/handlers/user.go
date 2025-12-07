@@ -72,9 +72,9 @@ func (h *UserHandler) List(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"users": users,
-		"total": total,
-		"limit": limit,
+		"users":  users,
+		"total":  total,
+		"limit":  limit,
 		"offset": offset,
 	})
 }

@@ -18,9 +18,9 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 	Username     string    `json:"username"`
 	PasswordHash string    `json:"-"`
-	TOTPSecret   string    `json:"-"`            // TOTP secret for 2FA (encrypted)
-	BackupCodes  string    `json:"-"`            // Backup codes for 2FA recovery (encrypted JSON array)
-	Role         UserRole  `json:"role"`         // User role (admin, operator, viewer)
+	TOTPSecret   string    `json:"-"`    // TOTP secret for 2FA (encrypted)
+	BackupCodes  string    `json:"-"`    // Backup codes for 2FA recovery (encrypted JSON array)
+	Role         UserRole  `json:"role"` // User role (admin, operator, viewer)
 	ID           int64     `json:"id"`
 	TOTPEnabled  bool      `json:"totp_enabled"` // Whether 2FA is enabled
 	IsAdmin      bool      `json:"is_admin"`     // Deprecated: use Role instead
