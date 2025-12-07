@@ -1,3 +1,10 @@
+# [2.1.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.0.0...v2.1.0) (2025-12-07)
+
+
+### Features
+
+* add security hardening and documentation improvements ([3be73ce](https://github.com/pandeptwidyaop/http-remote/commit/3be73ce725e5bd8e1273ef7f0dc457906847cd20))
+
 # [2.0.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.12.1...v2.0.0) (2025-12-07)
 
 
