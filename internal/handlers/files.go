@@ -69,13 +69,6 @@ func sanitizeFilename(filename string) string {
 	return filename
 }
 
-// securePath validates and resolves a path to prevent path traversal attacks
-// Returns the resolved absolute path and any error
-// This is a package-level function for backward compatibility (uses default system paths only)
-func securePath(inputPath string) (string, error) {
-	return securePathWithConfig(inputPath, nil, nil)
-}
-
 // securePathWithConfig validates and resolves a path with configurable allowed/blocked paths
 func securePathWithConfig(inputPath string, allowedPaths, blockedPaths []string) (string, error) {
 	// Clean the path first

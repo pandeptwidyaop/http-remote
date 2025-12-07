@@ -327,11 +327,11 @@ func TestAuthConfig_GetSessionDuration(t *testing.T) {
 func TestFilesConfig_EmptyByDefault(t *testing.T) {
 	cfg := &FilesConfig{}
 
-	if cfg.AllowedPaths != nil && len(cfg.AllowedPaths) > 0 {
+	if len(cfg.AllowedPaths) > 0 {
 		t.Error("expected AllowedPaths to be empty by default")
 	}
 
-	if cfg.BlockedPaths != nil && len(cfg.BlockedPaths) > 0 {
+	if len(cfg.BlockedPaths) > 0 {
 		t.Error("expected BlockedPaths to be empty by default")
 	}
 }

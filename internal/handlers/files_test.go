@@ -675,7 +675,7 @@ func TestAuditServiceDirect(t *testing.T) {
 }
 
 // setupFileHandlerTestWithConfig creates a test setup with custom config
-func setupFileHandlerTestWithConfig(t *testing.T, cfg *config.Config) (*services.AuditService, *gin.Engine, func()) {
+func setupFileHandlerTestWithConfig(t *testing.T, cfg *config.Config) (*gin.Engine, func()) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
@@ -716,7 +716,7 @@ func setupFileHandlerTestWithConfig(t *testing.T, cfg *config.Config) (*services
 		_ = db.Close()
 	}
 
-	return auditService, router, cleanup
+	return router, cleanup
 }
 
 func TestFileHandler_AllowedPaths(t *testing.T) {
@@ -743,7 +743,7 @@ func TestFileHandler_AllowedPaths(t *testing.T) {
 		},
 	}
 
-	_, router, cleanup := setupFileHandlerTestWithConfig(t, cfg)
+	router, cleanup := setupFileHandlerTestWithConfig(t, cfg)
 	defer cleanup()
 
 	// Test: Access to allowed path should work
@@ -810,7 +810,7 @@ func TestFileHandler_BlockedPaths(t *testing.T) {
 		},
 	}
 
-	_, router, cleanup := setupFileHandlerTestWithConfig(t, cfg)
+	router, cleanup := setupFileHandlerTestWithConfig(t, cfg)
 	defer cleanup()
 
 	// Test: Access to blocked path should fail
@@ -878,7 +878,7 @@ func TestFileHandler_AllowedAndBlockedPaths(t *testing.T) {
 		},
 	}
 
-	_, router, cleanup := setupFileHandlerTestWithConfig(t, cfg)
+	router, cleanup := setupFileHandlerTestWithConfig(t, cfg)
 	defer cleanup()
 
 	// Test: Access to allowed path should work
