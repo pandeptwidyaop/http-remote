@@ -100,11 +100,14 @@ func (s *AppService) GetAppByName(name string) (*models.App, error) {
 	return &app, nil
 }
 
-// GetAllApps retrieves all applications ordered by name.
+// GetAllApps retrieves all applications ordered by name with command counts.
 func (s *AppService) GetAllApps() ([]models.App, error) {
-	rows, err := s.db.Query(
-		"SELECT id, name, description, working_dir, token, created_at, updated_at FROM apps ORDER BY name",
-	)
+	rows, err := s.db.Query(`
+		SELECT a.id, a.name, a.description, a.working_dir, a.token, a.created_at, a.updated_at,
+		       (SELECT COUNT(*) FROM commands c WHERE c.app_id = a.id) as command_count
+		FROM apps a
+		ORDER BY a.name
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +116,7 @@ func (s *AppService) GetAllApps() ([]models.App, error) {
 	var apps []models.App
 	for rows.Next() {
 		var app models.App
-		if err := rows.Scan(&app.ID, &app.Name, &app.Description, &app.WorkingDir, &app.Token, &app.CreatedAt, &app.UpdatedAt); err != nil {
+		if err := rows.Scan(&app.ID, &app.Name, &app.Description, &app.WorkingDir, &app.Token, &app.CreatedAt, &app.UpdatedAt, &app.CommandCount); err != nil {
 			return nil, err
 		}
 		apps = append(apps, app)
@@ -204,9 +207,20 @@ func (s *AppService) CreateCommand(appID string, req *models.CreateCommandReques
 		timeout = 300
 	}
 
-	_, err := s.db.Exec(
-		"INSERT INTO commands (id, app_id, name, description, command, timeout_seconds) VALUES (?, ?, ?, ?, ?, ?)",
-		id, appID, req.Name, req.Description, req.Command, timeout,
+	// Get the next sort_order for this app
+	var maxOrder int
+	err := s.db.QueryRow(
+		"SELECT COALESCE(MAX(sort_order), -1) FROM commands WHERE app_id = ?",
+		appID,
+	).Scan(&maxOrder)
+	if err != nil {
+		maxOrder = -1
+	}
+	sortOrder := maxOrder + 1
+
+	_, err = s.db.Exec(
+		"INSERT INTO commands (id, app_id, name, description, command, timeout_seconds, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		id, appID, req.Name, req.Description, req.Command, timeout, sortOrder,
 	)
 	if err != nil {
 		return nil, err
@@ -219,9 +233,9 @@ func (s *AppService) CreateCommand(appID string, req *models.CreateCommandReques
 func (s *AppService) GetCommandByID(id string) (*models.Command, error) {
 	var cmd models.Command
 	err := s.db.QueryRow(
-		"SELECT id, app_id, name, description, command, timeout_seconds, created_at FROM commands WHERE id = ?",
+		"SELECT id, app_id, name, description, command, timeout_seconds, created_at, COALESCE(sort_order, 0) FROM commands WHERE id = ?",
 		id,
-	).Scan(&cmd.ID, &cmd.AppID, &cmd.Name, &cmd.Description, &cmd.Command, &cmd.TimeoutSeconds, &cmd.CreatedAt)
+	).Scan(&cmd.ID, &cmd.AppID, &cmd.Name, &cmd.Description, &cmd.Command, &cmd.TimeoutSeconds, &cmd.CreatedAt, &cmd.SortOrder)
 
 	if err == sql.ErrNoRows {
 		return nil, ErrCommandNotFound
@@ -232,10 +246,10 @@ func (s *AppService) GetCommandByID(id string) (*models.Command, error) {
 	return &cmd, nil
 }
 
-// GetCommandsByAppID retrieves all commands for a specific application.
+// GetCommandsByAppID retrieves all commands for a specific application ordered by sort_order.
 func (s *AppService) GetCommandsByAppID(appID string) ([]models.Command, error) {
 	rows, err := s.db.Query(
-		"SELECT id, app_id, name, description, command, timeout_seconds, created_at FROM commands WHERE app_id = ? ORDER BY name",
+		"SELECT id, app_id, name, description, command, timeout_seconds, created_at, COALESCE(sort_order, 0) FROM commands WHERE app_id = ? ORDER BY sort_order, created_at",
 		appID,
 	)
 	if err != nil {
@@ -246,7 +260,7 @@ func (s *AppService) GetCommandsByAppID(appID string) ([]models.Command, error) 
 	var commands []models.Command
 	for rows.Next() {
 		var cmd models.Command
-		if err := rows.Scan(&cmd.ID, &cmd.AppID, &cmd.Name, &cmd.Description, &cmd.Command, &cmd.TimeoutSeconds, &cmd.CreatedAt); err != nil {
+		if err := rows.Scan(&cmd.ID, &cmd.AppID, &cmd.Name, &cmd.Description, &cmd.Command, &cmd.TimeoutSeconds, &cmd.CreatedAt, &cmd.SortOrder); err != nil {
 			return nil, err
 		}
 		commands = append(commands, cmd)
@@ -254,13 +268,13 @@ func (s *AppService) GetCommandsByAppID(appID string) ([]models.Command, error) 
 	return commands, nil
 }
 
-// GetDefaultCommandByAppID retrieves the default (oldest) command for an application.
+// GetDefaultCommandByAppID retrieves the default (first by sort_order) command for an application.
 func (s *AppService) GetDefaultCommandByAppID(appID string) (*models.Command, error) {
 	var cmd models.Command
 	err := s.db.QueryRow(
-		"SELECT id, app_id, name, description, command, timeout_seconds, created_at FROM commands WHERE app_id = ? ORDER BY created_at LIMIT 1",
+		"SELECT id, app_id, name, description, command, timeout_seconds, created_at, COALESCE(sort_order, 0) FROM commands WHERE app_id = ? ORDER BY sort_order, created_at LIMIT 1",
 		appID,
-	).Scan(&cmd.ID, &cmd.AppID, &cmd.Name, &cmd.Description, &cmd.Command, &cmd.TimeoutSeconds, &cmd.CreatedAt)
+	).Scan(&cmd.ID, &cmd.AppID, &cmd.Name, &cmd.Description, &cmd.Command, &cmd.TimeoutSeconds, &cmd.CreatedAt, &cmd.SortOrder)
 
 	if err == sql.ErrNoRows {
 		return nil, ErrCommandNotFound
@@ -321,4 +335,38 @@ func (s *AppService) DeleteCommand(id string) error {
 		return ErrCommandNotFound
 	}
 	return nil
+}
+
+// ReorderCommands updates the sort_order of commands based on the provided order.
+func (s *AppService) ReorderCommands(appID string, commandIDs []string) error {
+	// Verify app exists
+	if _, err := s.GetAppByID(appID); err != nil {
+		return err
+	}
+
+	// Begin transaction
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Update sort_order for each command
+	for i, cmdID := range commandIDs {
+		result, err := tx.Exec(
+			"UPDATE commands SET sort_order = ? WHERE id = ? AND app_id = ?",
+			i, cmdID, appID,
+		)
+		if err != nil {
+			return err
+		}
+
+		// Verify the command belongs to this app
+		rows, _ := result.RowsAffected()
+		if rows == 0 {
+			return ErrCommandNotFound
+		}
+	}
+
+	return tx.Commit()
 }

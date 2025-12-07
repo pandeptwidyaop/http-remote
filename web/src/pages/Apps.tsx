@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Trash2, FolderOpen } from 'lucide-react';
+import { Plus, Trash2, FolderOpen, Terminal } from 'lucide-react';
 import { api } from '@/api/client';
 import { API_ENDPOINTS } from '@/lib/config';
 import type { App, CreateAppRequest } from '@/types';
@@ -8,6 +8,8 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import { toast } from '@/store/toastStore';
 
 export default function Apps() {
   const [apps, setApps] = useState<App[]>([]);
@@ -20,6 +22,8 @@ export default function Apps() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchApps();
@@ -46,6 +50,7 @@ export default function Apps() {
       await api.post(API_ENDPOINTS.apps, formData);
       setIsCreateModalOpen(false);
       setFormData({ name: '', description: '', working_dir: '' });
+      toast.success('App created', `${formData.name} has been created successfully`);
       fetchApps();
     } catch (error: any) {
       setError(error.message || 'Failed to create app');
@@ -54,16 +59,19 @@ export default function Apps() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete "${name}"? This will also delete all associated commands.`)) {
-      return;
-    }
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
 
+    setDeleting(true);
     try {
-      await api.delete(API_ENDPOINTS.app(id));
+      await api.delete(API_ENDPOINTS.app(deleteTarget.id));
+      toast.success('App deleted', `${deleteTarget.name} has been deleted`);
+      setDeleteTarget(null);
       fetchApps();
     } catch (error: any) {
-      alert(error.message || 'Failed to delete app');
+      toast.error('Delete failed', error.message || 'Failed to delete app');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -125,11 +133,17 @@ export default function Apps() {
                   )}
                 </div>
 
-                <div className="flex items-center text-sm text-gray-500">
-                  <FolderOpen className="h-4 w-4 mr-2" />
-                  <code className="bg-gray-100 px-2 py-1 rounded text-xs">
-                    {app.working_dir}
-                  </code>
+                <div className="space-y-2">
+                  <div className="flex items-center text-sm text-gray-500">
+                    <FolderOpen className="h-4 w-4 mr-2 flex-shrink-0" />
+                    <code className="bg-gray-100 px-2 py-1 rounded text-xs truncate">
+                      {app.working_dir}
+                    </code>
+                  </div>
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Terminal className="h-4 w-4 mr-2 flex-shrink-0" />
+                    <span>{app.command_count || 0} command{(app.command_count || 0) !== 1 ? 's' : ''}</span>
+                  </div>
                 </div>
 
                 <div className="flex items-center space-x-2 pt-4 border-t border-gray-200">
@@ -141,7 +155,7 @@ export default function Apps() {
                   <Button
                     variant="danger"
                     size="sm"
-                    onClick={() => handleDelete(app.id, app.name)}
+                    onClick={() => setDeleteTarget({ id: app.id, name: app.name })}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -205,6 +219,18 @@ export default function Apps() {
           </div>
         </form>
       </Modal>
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete App"
+        message={`Are you sure you want to delete "${deleteTarget?.name}"? This will also delete all associated commands.`}
+        confirmText="Delete"
+        variant="danger"
+        loading={deleting}
+      />
     </div>
   );
 }

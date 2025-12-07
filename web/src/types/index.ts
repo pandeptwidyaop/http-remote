@@ -18,6 +18,7 @@ export interface App {
   description: string;
   working_dir: string;
   token?: string;
+  command_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -29,6 +30,7 @@ export interface Command {
   description: string;
   command: string;
   timeout_seconds: number;
+  sort_order: number;
   created_at: string;
 }
 

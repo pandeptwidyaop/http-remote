@@ -38,9 +38,12 @@ func setupAppTestDB(t *testing.T) (*database.DB, *sql.DB) {
 			description TEXT,
 			command TEXT NOT NULL,
 			timeout_seconds INTEGER DEFAULT 300,
+			sort_order INTEGER DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE
 		);
+
+		CREATE INDEX idx_commands_sort_order ON commands(app_id, sort_order);
 
 		CREATE TABLE executions (
 			id TEXT PRIMARY KEY,
@@ -372,5 +375,208 @@ func TestAppService_DeleteCommand(t *testing.T) {
 	_, err = appSvc.GetCommandByID(cmd.ID)
 	if err != services.ErrCommandNotFound {
 		t.Errorf("expected ErrCommandNotFound after deletion, got %v", err)
+	}
+}
+
+func TestAppService_ReorderCommands(t *testing.T) {
+	db, sqlDB := setupAppTestDB(t)
+	defer func() { _ = sqlDB.Close() }()
+
+	appSvc := services.NewAppService(db)
+
+	// Create app
+	app, _ := appSvc.CreateApp(&models.CreateAppRequest{
+		Name:       "Test App",
+		WorkingDir: "/tmp/test",
+	})
+
+	// Create 3 commands
+	cmd1, _ := appSvc.CreateCommand(app.ID, &models.CreateCommandRequest{
+		Name:    "first",
+		Command: "echo first",
+	})
+	cmd2, _ := appSvc.CreateCommand(app.ID, &models.CreateCommandRequest{
+		Name:    "second",
+		Command: "echo second",
+	})
+	cmd3, _ := appSvc.CreateCommand(app.ID, &models.CreateCommandRequest{
+		Name:    "third",
+		Command: "echo third",
+	})
+
+	// Verify initial order
+	commands, _ := appSvc.GetCommandsByAppID(app.ID)
+	if len(commands) != 3 {
+		t.Fatalf("expected 3 commands, got %d", len(commands))
+	}
+	if commands[0].ID != cmd1.ID {
+		t.Errorf("expected first command to be cmd1")
+	}
+	if commands[1].ID != cmd2.ID {
+		t.Errorf("expected second command to be cmd2")
+	}
+	if commands[2].ID != cmd3.ID {
+		t.Errorf("expected third command to be cmd3")
+	}
+
+	// Reorder: move third to first position
+	newOrder := []string{cmd3.ID, cmd1.ID, cmd2.ID}
+	err := appSvc.ReorderCommands(app.ID, newOrder)
+	if err != nil {
+		t.Fatalf("failed to reorder commands: %v", err)
+	}
+
+	// Verify new order
+	commands, _ = appSvc.GetCommandsByAppID(app.ID)
+	if commands[0].ID != cmd3.ID {
+		t.Errorf("expected first command to be cmd3, got %s", commands[0].Name)
+	}
+	if commands[1].ID != cmd1.ID {
+		t.Errorf("expected second command to be cmd1, got %s", commands[1].Name)
+	}
+	if commands[2].ID != cmd2.ID {
+		t.Errorf("expected third command to be cmd2, got %s", commands[2].Name)
+	}
+
+	// Verify sort_order values
+	if commands[0].SortOrder != 0 {
+		t.Errorf("expected first command sort_order to be 0, got %d", commands[0].SortOrder)
+	}
+	if commands[1].SortOrder != 1 {
+		t.Errorf("expected second command sort_order to be 1, got %d", commands[1].SortOrder)
+	}
+	if commands[2].SortOrder != 2 {
+		t.Errorf("expected third command sort_order to be 2, got %d", commands[2].SortOrder)
+	}
+}
+
+func TestAppService_ReorderCommands_InvalidApp(t *testing.T) {
+	db, sqlDB := setupAppTestDB(t)
+	defer func() { _ = sqlDB.Close() }()
+
+	appSvc := services.NewAppService(db)
+
+	err := appSvc.ReorderCommands("nonexistent-app", []string{"cmd1", "cmd2"})
+	if err != services.ErrAppNotFound {
+		t.Errorf("expected ErrAppNotFound, got %v", err)
+	}
+}
+
+func TestAppService_ReorderCommands_InvalidCommand(t *testing.T) {
+	db, sqlDB := setupAppTestDB(t)
+	defer func() { _ = sqlDB.Close() }()
+
+	appSvc := services.NewAppService(db)
+
+	// Create app
+	app, _ := appSvc.CreateApp(&models.CreateAppRequest{
+		Name:       "Test App",
+		WorkingDir: "/tmp/test",
+	})
+
+	// Create one command
+	cmd, _ := appSvc.CreateCommand(app.ID, &models.CreateCommandRequest{
+		Name:    "test",
+		Command: "echo test",
+	})
+
+	// Try to reorder with invalid command ID
+	err := appSvc.ReorderCommands(app.ID, []string{cmd.ID, "invalid-cmd-id"})
+	if err != services.ErrCommandNotFound {
+		t.Errorf("expected ErrCommandNotFound for invalid command, got %v", err)
+	}
+}
+
+func TestAppService_CreateCommand_SortOrder(t *testing.T) {
+	db, sqlDB := setupAppTestDB(t)
+	defer func() { _ = sqlDB.Close() }()
+
+	appSvc := services.NewAppService(db)
+
+	// Create app
+	app, _ := appSvc.CreateApp(&models.CreateAppRequest{
+		Name:       "Test App",
+		WorkingDir: "/tmp/test",
+	})
+
+	// Create commands and verify sort_order increments
+	cmd1, err := appSvc.CreateCommand(app.ID, &models.CreateCommandRequest{
+		Name:    "first",
+		Command: "echo first",
+	})
+	if err != nil {
+		t.Fatalf("failed to create first command: %v", err)
+	}
+	if cmd1.SortOrder != 0 {
+		t.Errorf("expected first command sort_order to be 0, got %d", cmd1.SortOrder)
+	}
+
+	cmd2, err := appSvc.CreateCommand(app.ID, &models.CreateCommandRequest{
+		Name:    "second",
+		Command: "echo second",
+	})
+	if err != nil {
+		t.Fatalf("failed to create second command: %v", err)
+	}
+	if cmd2.SortOrder != 1 {
+		t.Errorf("expected second command sort_order to be 1, got %d", cmd2.SortOrder)
+	}
+
+	cmd3, err := appSvc.CreateCommand(app.ID, &models.CreateCommandRequest{
+		Name:    "third",
+		Command: "echo third",
+	})
+	if err != nil {
+		t.Fatalf("failed to create third command: %v", err)
+	}
+	if cmd3.SortOrder != 2 {
+		t.Errorf("expected third command sort_order to be 2, got %d", cmd3.SortOrder)
+	}
+}
+
+func TestAppService_GetDefaultCommand_UsesSortOrder(t *testing.T) {
+	db, sqlDB := setupAppTestDB(t)
+	defer func() { _ = sqlDB.Close() }()
+
+	appSvc := services.NewAppService(db)
+
+	// Create app
+	app, _ := appSvc.CreateApp(&models.CreateAppRequest{
+		Name:       "Test App",
+		WorkingDir: "/tmp/test",
+	})
+
+	// Create commands in order
+	cmd1, _ := appSvc.CreateCommand(app.ID, &models.CreateCommandRequest{
+		Name:    "first",
+		Command: "echo first",
+	})
+	cmd2, _ := appSvc.CreateCommand(app.ID, &models.CreateCommandRequest{
+		Name:    "second",
+		Command: "echo second",
+	})
+
+	// Default should be first command
+	defaultCmd, err := appSvc.GetDefaultCommandByAppID(app.ID)
+	if err != nil {
+		t.Fatalf("failed to get default command: %v", err)
+	}
+	if defaultCmd.ID != cmd1.ID {
+		t.Errorf("expected default to be cmd1")
+	}
+
+	// Reorder: make cmd2 first
+	err = appSvc.ReorderCommands(app.ID, []string{cmd2.ID, cmd1.ID})
+	if err != nil {
+		t.Fatalf("failed to reorder: %v", err)
+	}
+
+	// Now default should be cmd2
+	defaultCmd, err = appSvc.GetDefaultCommandByAppID(app.ID)
+	if err != nil {
+		t.Fatalf("failed to get default command: %v", err)
+	}
+	if defaultCmd.ID != cmd2.ID {
+		t.Errorf("expected default to be cmd2 after reorder")
 	}
 }

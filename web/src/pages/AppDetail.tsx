@@ -1,6 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Play, Edit2, Trash2, Copy, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Plus, Play, Trash2, Copy, RefreshCw, GripVertical, PlayCircle } from 'lucide-react';
 import { api } from '@/api/client';
 import { API_ENDPOINTS, getBaseUrl } from '@/lib/config';
 import type { App, Command, CreateCommandRequest } from '@/types';
@@ -9,6 +9,8 @@ import Card from '@/components/ui/Card';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
 import Textarea from '@/components/ui/Textarea';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import { toast } from '@/store/toastStore';
 
 export default function AppDetail() {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +27,17 @@ export default function AppDetail() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Drag and drop state
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [isReordering, setIsReordering] = useState(false);
+
+  // Confirm dialogs state
+  const [deleteCommandTarget, setDeleteCommandTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deletingCommand, setDeletingCommand] = useState(false);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -64,6 +77,7 @@ export default function AppDetail() {
     try {
       await api.post(API_ENDPOINTS.appCommands(id), formData);
       setIsCreateModalOpen(false);
+      toast.success('Command created', `${formData.name} has been created`);
       setFormData({
         name: '',
         description: '',
@@ -78,39 +92,98 @@ export default function AppDetail() {
     }
   };
 
-  const handleDeleteCommand = async (commandId: string, commandName: string) => {
-    if (!window.confirm(`Are you sure you want to delete command "${commandName}"?`)) {
-      return;
-    }
+  const handleDeleteCommand = async () => {
+    if (!deleteCommandTarget) return;
 
+    setDeletingCommand(true);
     try {
-      await api.delete(API_ENDPOINTS.command(commandId));
+      await api.delete(API_ENDPOINTS.command(deleteCommandTarget.id));
+      toast.success('Command deleted', `${deleteCommandTarget.name} has been deleted`);
+      setDeleteCommandTarget(null);
       fetchData();
     } catch (error: any) {
-      alert(error.message || 'Failed to delete command');
+      toast.error('Delete failed', error.message || 'Failed to delete command');
+    } finally {
+      setDeletingCommand(false);
     }
   };
 
   const handleCopyToken = () => {
     if (app?.token) {
       navigator.clipboard.writeText(app.token);
-      alert('Token copied to clipboard!');
+      toast.success('Copied!', 'Token copied to clipboard');
     }
   };
 
   const handleRegenerateToken = async () => {
     if (!id) return;
-    if (!window.confirm('Are you sure you want to regenerate the token? The old token will stop working.')) {
-      return;
-    }
 
+    setRegenerating(true);
     try {
       await api.post(API_ENDPOINTS.regenerateToken(id));
       fetchData();
-      alert('Token regenerated successfully!');
+      setShowRegenerateConfirm(false);
+      toast.success('Token regenerated', 'The new token is now active');
     } catch (error: any) {
-      alert(error.message || 'Failed to regenerate token');
+      toast.error('Failed', error.message || 'Failed to regenerate token');
+    } finally {
+      setRegenerating(false);
     }
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex || !id) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    // Reorder locally first for immediate feedback
+    const newCommands = [...commands];
+    const [draggedItem] = newCommands.splice(draggedIndex, 1);
+    newCommands.splice(dropIndex, 0, draggedItem);
+    setCommands(newCommands);
+
+    // Reset drag state
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+
+    // Send reorder request to server
+    setIsReordering(true);
+    try {
+      const commandIds = newCommands.map(cmd => cmd.id);
+      await api.post(API_ENDPOINTS.reorderCommands(id), { command_ids: commandIds });
+      toast.success('Reordered', 'Commands have been reordered');
+    } catch (error: any) {
+      console.error('Failed to reorder commands:', error);
+      // Revert on error
+      fetchData();
+      toast.error('Reorder failed', error.message || 'Failed to reorder commands');
+    } finally {
+      setIsReordering(false);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   if (loading) {
@@ -178,7 +251,7 @@ export default function AppDetail() {
           <Button variant="secondary" size="sm" onClick={handleCopyToken}>
             <Copy className="h-4 w-4" />
           </Button>
-          <Button variant="danger" size="sm" onClick={handleRegenerateToken}>
+          <Button variant="danger" size="sm" onClick={() => setShowRegenerateConfirm(true)}>
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
@@ -186,7 +259,24 @@ export default function AppDetail() {
 
       {/* Commands */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Commands</h2>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-4">
+            <h2 className="text-2xl font-bold text-gray-900">Commands</h2>
+            {commands.length > 1 && (
+              <Link to={`/apps/${app.id}/execute-all`}>
+                <Button variant="secondary" size="sm">
+                  <PlayCircle className="h-4 w-4 mr-2" />
+                  Execute All
+                </Button>
+              </Link>
+            )}
+          </div>
+          {commands.length > 1 && (
+            <p className="text-sm text-gray-500">
+              Drag to reorder • First command is default for API deploy
+            </p>
+          )}
+        </div>
         {commands.length === 0 ? (
           <Card className="p-12">
             <div className="text-center text-gray-500">
@@ -200,36 +290,67 @@ export default function AppDetail() {
             </div>
           </Card>
         ) : (
-          <div className="space-y-4">
-            {commands.map((command) => (
-              <Card key={command.id} className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900">{command.name}</h3>
-                    {command.description && (
-                      <p className="text-gray-600 text-sm mt-1">{command.description}</p>
-                    )}
-                    <pre className="bg-gray-900 text-green-400 p-3 rounded-md mt-3 text-sm overflow-x-auto font-mono">
-                      {command.command}
-                    </pre>
-                    <p className="text-sm text-gray-500 mt-2">
-                      Timeout: {command.timeout_seconds}s
-                    </p>
+          <div className="space-y-2">
+            {commands.map((command, index) => (
+              <Card
+                key={command.id}
+                className={`p-4 transition-all duration-200 ${
+                  draggedIndex === index ? 'opacity-50 scale-[0.98]' : ''
+                } ${
+                  dragOverIndex === index ? 'border-blue-500 border-2 bg-blue-50' : ''
+                } ${isReordering ? 'pointer-events-none' : ''}`}
+                draggable
+                onDragStart={() => handleDragStart(index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+              >
+                <div className="flex items-start">
+                  {/* Drag Handle */}
+                  <div className="flex items-center mr-3 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600">
+                    <GripVertical className="h-5 w-5" />
+                    <span className="text-xs font-medium ml-1 w-4">{index + 1}</span>
                   </div>
-                  <div className="flex items-center space-x-2 ml-4">
-                    <Link to={`/execute/${command.id}`}>
-                      <Button variant="primary" size="sm">
-                        <Play className="h-4 w-4 mr-1" />
-                        Execute
-                      </Button>
-                    </Link>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleDeleteCommand(command.id, command.name)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+
+                  {/* Command Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-semibold text-gray-900">{command.name}</h3>
+                          {index === 0 && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+                              Default
+                            </span>
+                          )}
+                        </div>
+                        {command.description && (
+                          <p className="text-gray-600 text-sm mt-1">{command.description}</p>
+                        )}
+                        <pre className="bg-gray-900 text-green-400 p-3 rounded-md mt-3 text-sm overflow-x-auto font-mono">
+                          {command.command}
+                        </pre>
+                        <p className="text-sm text-gray-500 mt-2">
+                          Timeout: {command.timeout_seconds}s
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
+                        <Link to={`/execute/${command.id}`}>
+                          <Button variant="primary" size="sm">
+                            <Play className="h-4 w-4 mr-1" />
+                            Execute
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => setDeleteCommandTarget({ id: command.id, name: command.name })}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -303,6 +424,30 @@ export default function AppDetail() {
           </div>
         </form>
       </Modal>
+
+      {/* Delete Command Confirmation */}
+      <ConfirmDialog
+        isOpen={!!deleteCommandTarget}
+        onClose={() => setDeleteCommandTarget(null)}
+        onConfirm={handleDeleteCommand}
+        title="Delete Command"
+        message={`Are you sure you want to delete "${deleteCommandTarget?.name}"?`}
+        confirmText="Delete"
+        variant="danger"
+        loading={deletingCommand}
+      />
+
+      {/* Regenerate Token Confirmation */}
+      <ConfirmDialog
+        isOpen={showRegenerateConfirm}
+        onClose={() => setShowRegenerateConfirm(false)}
+        onConfirm={handleRegenerateToken}
+        title="Regenerate Token"
+        message="Are you sure you want to regenerate the token? The old token will stop working immediately."
+        confirmText="Regenerate"
+        variant="warning"
+        loading={regenerating}
+      />
     </div>
   );
 }

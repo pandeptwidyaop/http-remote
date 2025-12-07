@@ -4,6 +4,7 @@ import { useAuthStore } from './store/authStore';
 
 // Layout
 import Layout from './components/layout/Layout';
+import ToastContainer from './components/ui/Toast';
 
 // Pages
 import Login from './pages/Login';
@@ -11,6 +12,7 @@ import Dashboard from './pages/Dashboard';
 import Apps from './pages/Apps';
 import AppDetail from './pages/AppDetail';
 import Execute from './pages/Execute';
+import ExecuteAll from './pages/ExecuteAll';
 import Executions from './pages/Executions';
 import AuditLogs from './pages/AuditLogs';
 import Settings from './pages/Settings';
@@ -47,6 +49,7 @@ function App() {
 
   return (
     <Router>
+      <ToastContainer />
       <Routes>
         <Route path="/login" element={<Login />} />
 
@@ -91,6 +94,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Execute />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/apps/:id/execute-all"
+          element={
+            <ProtectedRoute>
+              <ExecuteAll />
             </ProtectedRoute>
           }
         />
