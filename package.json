@@ -1,0 +1,25 @@
+{
+  "name": "deploy-by-url",
+  "version": "1.0.0",
+  "description": "[![Test](https://github.com/pandeptwidyaop/http-remote/actions/workflows/test.yml/badge.svg)](https://github.com/pandeptwidyaop/http-remote/actions/workflows/test.yml) [![Release](https://github.com/pandeptwidyaop/http-remote/actions/workflows/release.yml/badge.svg)](https://github.com/pandeptwidyaop/http-remote/actions/workflows/release.yml) [![codecov](https://codecov.io/gh/pandeptwidyaop/http-remote/branch/main/graph/badge.svg)](https://codecov.io/gh/pandeptwidyaop/http-remote) [![Go Report Card](https://goreportcard.com/badge/github.com/pandeptwidyaop/http-remote)](https://goreportcard.com/report/github.com/pandeptwidyaop/http-remote) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pandeptwidyaop/http-remote.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/pandeptwidyaop/http-remote/issues"
+  },
+  "homepage": "https://github.com/pandeptwidyaop/http-remote#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@types/node": "^24.10.1"
+  }
+}

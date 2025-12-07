@@ -25,3 +25,14 @@ tmp/
 
 # Built React SPA
 internal/assets/web/dist/
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+# Screenshots
+screenshots/
