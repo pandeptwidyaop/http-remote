@@ -1,3 +1,21 @@
+# [2.0.0](https://github.com/pandeptwidyaop/http-remote/compare/v1.12.1...v2.0.0) (2025-12-07)
+
+
+### security
+
+* require encryption key and secure admin password at startup ([4c0e40b](https://github.com/pandeptwidyaop/http-remote/commit/4c0e40be2442012486436a84b406c121c17799d6))
+
+
+### BREAKING CHANGES
+
+* config.yaml now requires:
+- security.encryption_key: 64-character hex string
+- admin.password: must not be "changeme"
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
 ## [1.12.1](https://github.com/pandeptwidyaop/http-remote/compare/v1.12.0...v1.12.1) (2025-12-07)
 
 
