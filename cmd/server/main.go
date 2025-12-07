@@ -22,41 +22,58 @@ import (
 func main() {
 	// Check for subcommands first
 	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "upgrade":
-			force := false
-			if len(os.Args) > 2 && (os.Args[2] == "-f" || os.Args[2] == "--force") {
-				force = true
-			}
-			if err := upgrade.Run(force); err != nil {
-				fmt.Fprintf(os.Stderr, "Upgrade failed: %v\n", err)
+		// Skip flag-like arguments (they'll be handled by flag.Parse)
+		arg := os.Args[1]
+		if len(arg) > 0 && arg[0] != '-' {
+			switch arg {
+			case "help":
+				printHelp()
+				os.Exit(0)
+			case "upgrade":
+				force := false
+				if len(os.Args) > 2 && (os.Args[2] == "-f" || os.Args[2] == "--force") {
+					force = true
+				}
+				if err := upgrade.Run(force); err != nil {
+					fmt.Fprintf(os.Stderr, "Upgrade failed: %v\n", err)
+					os.Exit(1)
+				}
+				os.Exit(0)
+			case "version":
+				fmt.Printf("HTTP Remote %s\n", version.Version)
+				fmt.Printf("Build Time: %s\n", version.BuildTime)
+				fmt.Printf("Git Commit: %s\n", version.GitCommit)
+				os.Exit(0)
+			case "install-service":
+				runInstallService()
+				os.Exit(0)
+			case "uninstall-service":
+				runUninstallService()
+				os.Exit(0)
+			case "service":
+				if len(os.Args) > 2 {
+					runServiceCommand(os.Args[2])
+				} else {
+					fmt.Println("Usage: http-remote service <status|start|stop|restart>")
+				}
+				os.Exit(0)
+			default:
+				fmt.Fprintf(os.Stderr, "Error: Unknown command '%s'\n\n", arg)
+				printHelp()
 				os.Exit(1)
 			}
-			os.Exit(0)
-		case "version":
-			fmt.Printf("HTTP Remote %s\n", version.Version)
-			fmt.Printf("Build Time: %s\n", version.BuildTime)
-			fmt.Printf("Git Commit: %s\n", version.GitCommit)
-			os.Exit(0)
-		case "install-service":
-			runInstallService()
-			os.Exit(0)
-		case "uninstall-service":
-			runUninstallService()
-			os.Exit(0)
-		case "service":
-			if len(os.Args) > 2 {
-				runServiceCommand(os.Args[2])
-			} else {
-				fmt.Println("Usage: http-remote service <status|start|stop|restart>")
-			}
-			os.Exit(0)
 		}
 	}
 
 	configPath := flag.String("config", "config.yaml", "path to config file")
 	showVersion := flag.Bool("version", false, "show version information")
+	showHelp := flag.Bool("help", false, "show help information")
 	flag.Parse()
+
+	if *showHelp {
+		printHelp()
+		os.Exit(0)
+	}
 
 	if *showVersion {
 		fmt.Printf("HTTP Remote %s\n", version.Version)
@@ -248,6 +265,35 @@ func runUninstallService() {
 	}
 
 	fmt.Println("Service uninstalled successfully!")
+}
+
+// printHelp displays all available commands.
+func printHelp() {
+	fmt.Printf("HTTP Remote %s - DevOps Deployment Tool\n\n", version.Version)
+	fmt.Println("Usage:")
+	fmt.Println("  http-remote [command] [options]")
+	fmt.Println("")
+	fmt.Println("Commands:")
+	fmt.Println("  (no command)       Start the HTTP server")
+	fmt.Println("  help               Show this help message")
+	fmt.Println("  version            Show version information")
+	fmt.Println("  upgrade [-f]       Upgrade to the latest version (-f to force)")
+	fmt.Println("  install-service    Install as systemd service (Linux only, requires sudo)")
+	fmt.Println("  uninstall-service  Uninstall systemd service (Linux only, requires sudo)")
+	fmt.Println("  service <cmd>      Manage systemd service (Linux only)")
+	fmt.Println("                     Commands: status, start, stop, restart")
+	fmt.Println("")
+	fmt.Println("Options:")
+	fmt.Println("  -config string     Path to config file (default \"config.yaml\")")
+	fmt.Println("  -version           Show version information")
+	fmt.Println("  -help              Show this help message")
+	fmt.Println("")
+	fmt.Println("Examples:")
+	fmt.Println("  http-remote                          # Start server with default config")
+	fmt.Println("  http-remote -config /etc/app.yaml    # Start server with custom config")
+	fmt.Println("  http-remote upgrade                  # Upgrade to latest version")
+	fmt.Println("  http-remote service status           # Check service status")
+	fmt.Println("  sudo http-remote install-service     # Install as systemd service")
 }
 
 // runServiceCommand handles service management subcommands.
