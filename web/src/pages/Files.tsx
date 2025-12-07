@@ -22,12 +22,87 @@ import {
   Save,
   FolderPlus,
 } from 'lucide-react';
+import Editor, { loader } from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
 import { api } from '@/api/client';
+
+// Configure Monaco to use local bundle instead of CDN
+loader.config({ monaco });
 import { getPathPrefix } from '@/lib/config';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Modal from '@/components/ui/Modal';
 import Input from '@/components/ui/Input';
+
+// Get Monaco language from file extension
+function getLanguageFromFilename(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() || '';
+  const languageMap: Record<string, string> = {
+    // JavaScript/TypeScript
+    js: 'javascript',
+    jsx: 'javascript',
+    ts: 'typescript',
+    tsx: 'typescript',
+    mjs: 'javascript',
+    cjs: 'javascript',
+    // Web
+    html: 'html',
+    htm: 'html',
+    css: 'css',
+    scss: 'scss',
+    less: 'less',
+    // Data formats
+    json: 'json',
+    xml: 'xml',
+    yaml: 'yaml',
+    yml: 'yaml',
+    toml: 'ini',
+    // Programming languages
+    py: 'python',
+    go: 'go',
+    rs: 'rust',
+    java: 'java',
+    kt: 'kotlin',
+    scala: 'scala',
+    c: 'c',
+    cpp: 'cpp',
+    cc: 'cpp',
+    h: 'c',
+    hpp: 'cpp',
+    cs: 'csharp',
+    rb: 'ruby',
+    php: 'php',
+    swift: 'swift',
+    r: 'r',
+    lua: 'lua',
+    perl: 'perl',
+    pl: 'perl',
+    // Shell
+    sh: 'shell',
+    bash: 'shell',
+    zsh: 'shell',
+    fish: 'shell',
+    ps1: 'powershell',
+    bat: 'bat',
+    cmd: 'bat',
+    // Config files
+    dockerfile: 'dockerfile',
+    makefile: 'makefile',
+    gitignore: 'plaintext',
+    env: 'plaintext',
+    // Database
+    sql: 'sql',
+    // Markdown
+    md: 'markdown',
+    markdown: 'markdown',
+    // Other
+    graphql: 'graphql',
+    gql: 'graphql',
+    vue: 'html',
+    svelte: 'html',
+  };
+  return languageMap[ext] || 'plaintext';
+}
 
 interface FileInfo {
   name: string;
@@ -756,7 +831,7 @@ export default function Files() {
           setFileContent(null);
         }}
         title={fileContent?.name || 'View File'}
-        size="lg"
+        size="xl"
       >
         {fileContent && (
           <div className="space-y-4">
@@ -784,15 +859,30 @@ export default function Files() {
                 </Button>
               </div>
             ) : (
-              <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-auto max-h-96 text-sm font-mono">
-                {fileContent.content}
-              </pre>
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <Editor
+                  height="500px"
+                  language={getLanguageFromFilename(fileContent.name)}
+                  value={fileContent.content}
+                  theme="vs-dark"
+                  loading={<div className="flex items-center justify-center h-[500px] bg-gray-900 text-gray-400">Loading editor...</div>}
+                  options={{
+                    readOnly: true,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    fontSize: 13,
+                    lineNumbers: 'on',
+                    wordWrap: 'on',
+                    automaticLayout: true,
+                  }}
+                />
+              </div>
             )}
           </div>
         )}
       </Modal>
 
-      {/* Edit File Modal */}
+      {/* Edit File Modal - Full screen editor */}
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => {
@@ -800,16 +890,32 @@ export default function Files() {
           setEditContent('');
         }}
         title={`Edit: ${selectedFile?.name}`}
-        size="lg"
+        size="full"
       >
-        <div className="space-y-4">
-          <textarea
-            value={editContent}
-            onChange={(e) => setEditContent(e.target.value)}
-            className="w-full h-96 p-4 font-mono text-sm bg-gray-900 text-gray-100 rounded-lg border-0 focus:ring-2 focus:ring-blue-500"
-            spellCheck={false}
-          />
-          <div className="flex justify-end gap-3">
+        <div className="flex flex-col h-[calc(100vh-200px)]">
+          <div className="flex-1 border border-gray-200 rounded-lg overflow-hidden">
+            <Editor
+              height="100%"
+              language={selectedFile ? getLanguageFromFilename(selectedFile.name) : 'plaintext'}
+              value={editContent}
+              onChange={(value) => setEditContent(value || '')}
+              theme="vs-dark"
+              loading={<div className="flex items-center justify-center h-full bg-gray-900 text-gray-400">Loading editor...</div>}
+              options={{
+                minimap: { enabled: true },
+                scrollBeyondLastLine: false,
+                fontSize: 14,
+                lineNumbers: 'on',
+                wordWrap: 'on',
+                automaticLayout: true,
+                tabSize: 2,
+                insertSpaces: true,
+                formatOnPaste: true,
+                bracketPairColorization: { enabled: true },
+              }}
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-4">
             <Button
               variant="secondary"
               onClick={() => {
