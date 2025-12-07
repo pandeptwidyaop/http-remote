@@ -317,23 +317,19 @@ func (s *AuthService) GenerateSecurePassword(length int) (string, error) {
 	return base64.URLEncoding.EncodeToString(bytes)[:length], nil
 }
 
+// ErrDefaultPassword is returned when the admin password is still set to default
+var ErrDefaultPassword = errors.New("admin password must be changed from default 'changeme' in config.yaml")
+
 // EnsureAdminUser ensures an admin user exists, creating one if needed.
+// Returns ErrDefaultPassword if the password is still set to "changeme".
 func (s *AuthService) EnsureAdminUser() error {
 	_, err := s.GetUserByUsername(s.cfg.Admin.Username)
 	if err == ErrUserNotFound {
 		password := s.cfg.Admin.Password
 
-		// If default password is still "changeme", generate a random one
+		// Refuse to start with default password - security requirement
 		if password == "changeme" {
-			generated, err := s.GenerateSecurePassword(16)
-			if err != nil {
-				return err
-			}
-			password = generated
-			log.Printf("⚠️  WARNING: Default admin password detected!")
-			log.Printf("📝 Generated secure admin password: %s", password)
-			log.Printf("🔒 Please save this password and change it after first login")
-			log.Printf("   Username: %s", s.cfg.Admin.Username)
+			return ErrDefaultPassword
 		}
 
 		_, err = s.CreateUser(s.cfg.Admin.Username, password, true)

@@ -2,8 +2,8 @@
 package main
 
 import (
-	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -72,30 +72,36 @@ func main() {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
-	// Initialize crypto service for TOTP secret encryption
+	// Initialize crypto service for TOTP secret encryption - REQUIRED
 	var cryptoService *services.CryptoService
-	if cfg.Security.EncryptionKey != "" {
-		key, err := hex.DecodeString(cfg.Security.EncryptionKey)
-		if err != nil {
-			log.Fatalf("Invalid encryption key (must be 64 hex chars for 32 bytes): %v", err)
-		}
-		cryptoService, err = services.NewCryptoService(key)
-		if err != nil {
-			log.Fatalf("Failed to initialize crypto service: %v", err)
-		}
-		log.Println("Encryption enabled for sensitive data (TOTP secrets)")
-	} else {
-		// Generate a warning and create a random key for this session
-		log.Println("WARNING: No encryption key configured. Generating random key for this session.")
-		log.Println("         TOTP secrets will be encrypted but won't survive restarts without a persistent key.")
-		log.Println("         Add 'security.encryption_key' to config.yaml with a 64-character hex string.")
-		key := make([]byte, 32)
-		if _, err := rand.Read(key); err != nil {
-			log.Fatalf("Failed to generate random encryption key: %v", err)
-		}
-		log.Printf("         Generated key (save this): %s", hex.EncodeToString(key))
-		cryptoService, _ = services.NewCryptoService(key)
+	if cfg.Security.EncryptionKey == "" {
+		log.Println("")
+		log.Println("╔══════════════════════════════════════════════════════════════════╗")
+		log.Println("║  SECURITY ERROR: Encryption key not configured!                  ║")
+		log.Println("║                                                                  ║")
+		log.Println("║  Please add 'security.encryption_key' to config.yaml.           ║")
+		log.Println("║  Generate a key with: openssl rand -hex 32                       ║")
+		log.Println("║                                                                  ║")
+		log.Println("║  Example:                                                        ║")
+		log.Println("║    security:                                                     ║")
+		log.Println("║      encryption_key: \"<64-character-hex-string>\"                 ║")
+		log.Println("╚══════════════════════════════════════════════════════════════════╝")
+		log.Println("")
+		log.Fatalf("Application startup aborted: encryption key is required")
 	}
+
+	key, err := hex.DecodeString(cfg.Security.EncryptionKey)
+	if err != nil {
+		log.Fatalf("Invalid encryption key (must be 64 hex chars for 32 bytes): %v", err)
+	}
+	if len(key) != 32 {
+		log.Fatalf("Invalid encryption key length: expected 32 bytes (64 hex chars), got %d bytes", len(key))
+	}
+	cryptoService, err = services.NewCryptoService(key)
+	if err != nil {
+		log.Fatalf("Failed to initialize crypto service: %v", err)
+	}
+	log.Println("Encryption enabled for sensitive data (TOTP secrets)")
 
 	authService := services.NewAuthService(db, cfg, cryptoService)
 	appService := services.NewAppService(db)
@@ -103,7 +109,23 @@ func main() {
 	auditService := services.NewAuditService(db)
 
 	if err := authService.EnsureAdminUser(); err != nil {
-		log.Printf("Warning: Could not ensure admin user: %v", err)
+		if errors.Is(err, services.ErrDefaultPassword) {
+			log.Println("")
+			log.Println("╔══════════════════════════════════════════════════════════════════╗")
+			log.Println("║  SECURITY ERROR: Default admin password detected!                ║")
+			log.Println("║                                                                  ║")
+			log.Println("║  Please change 'admin.password' in config.yaml from 'changeme'  ║")
+			log.Println("║  to a secure password before starting the application.          ║")
+			log.Println("║                                                                  ║")
+			log.Println("║  Example:                                                        ║")
+			log.Println("║    admin:                                                        ║")
+			log.Println("║      username: \"admin\"                                           ║")
+			log.Println("║      password: \"YourSecurePassword123!\"                          ║")
+			log.Println("╚══════════════════════════════════════════════════════════════════╝")
+			log.Println("")
+			log.Fatalf("Application startup aborted: %v", err)
+		}
+		log.Fatalf("Failed to ensure admin user: %v", err)
 	}
 
 	r := router.New(cfg, authService, appService, executorService, auditService)
