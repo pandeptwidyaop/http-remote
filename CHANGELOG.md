@@ -1,3 +1,11 @@
+# [2.7.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.6.0...v2.7.0) (2025-12-07)
+
+
+### Features
+
+* add help command and validate unknown commands ([d6284a5](https://github.com/pandeptwidyaop/http-remote/commit/d6284a54c4de1a66675f7576d33c6ab0db73f4bf))
+* add systemd service management and UI upgrade support ([90a2723](https://github.com/pandeptwidyaop/http-remote/commit/90a27230039e4575c22f451a591221fc3b8d6f9f))
+
 # [2.6.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.5.0...v2.6.0) (2025-12-07)
 
 
