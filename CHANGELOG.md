@@ -1,3 +1,10 @@
+# [2.3.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.2.0...v2.3.0) (2025-12-07)
+
+
+### Features
+
+* **ui:** modernize login page with glassmorphism design ([d21602b](https://github.com/pandeptwidyaop/http-remote/commit/d21602bb1d4a0bc25fe31730f28c29573ba40acf))
+
 # [2.2.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.1.0...v2.2.0) (2025-12-07)
 
 
