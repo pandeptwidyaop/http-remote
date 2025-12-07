@@ -1,3 +1,10 @@
+# [2.6.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.5.0...v2.6.0) (2025-12-07)
+
+
+### Features
+
+* add Monaco Editor to file browser for code editing ([4456e13](https://github.com/pandeptwidyaop/http-remote/commit/4456e13f0b1a99947e2c3691c06c77ebb3191c5a))
+
 # [2.5.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.4.2...v2.5.0) (2025-12-07)
 
 
