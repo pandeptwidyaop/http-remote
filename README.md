@@ -117,6 +117,17 @@ security:
   # Account lockout settings (brute force protection)
   max_login_attempts: 5    # Lock after 5 failed attempts (default: 5)
   lockout_duration: "15m"  # Lock for 15 minutes (default: 15m)
+
+# File browser security settings (optional)
+files:
+  # Whitelist: Only allow access to these paths (if set, all other paths are blocked)
+  allowed_paths:
+    - "/home/devops"
+    - "/opt/apps"
+  # Blacklist: Block access to these paths (in addition to system paths)
+  blocked_paths:
+    - "/home/devops/.ssh"
+    - "/home/devops/.gnupg"
 ```
 
 ### Required Configuration
@@ -987,6 +998,9 @@ Rate limit headers included in responses:
 
 - **Path Traversal Protection**: All file paths validated using `filepath.EvalSymlinks()` to prevent symlink attacks
 - **System Path Protection**: Critical system directories (`/bin`, `/etc`, `/usr`, etc.) are protected from modification
+- **Configurable Path Access**:
+  - `files.allowed_paths`: Whitelist of allowed paths (if set, only these paths are accessible)
+  - `files.blocked_paths`: Blacklist of blocked paths (in addition to system paths)
 - **Filename Sanitization**: Uploaded file names are sanitized to remove dangerous characters and patterns
 - **Command Output Limits**: Execution output is truncated at configurable limit (default 10MB) to prevent memory exhaustion
 

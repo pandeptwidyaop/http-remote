@@ -47,6 +47,7 @@ func setupTestDB(t *testing.T) (*database.DB, *sql.DB, *config.Config) {
 			description TEXT,
 			command TEXT NOT NULL,
 			timeout_seconds INTEGER DEFAULT 300,
+			sort_order INTEGER DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (app_id) REFERENCES apps(id)
 		);
