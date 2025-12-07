@@ -1,3 +1,12 @@
+# [2.2.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.1.0...v2.2.0) (2025-12-07)
+
+
+### Features
+
+* add command reordering with drag and drop support ([111861e](https://github.com/pandeptwidyaop/http-remote/commit/111861ef5f7bca409c6f09411ff0fe27972fbd67))
+* add path restrictions for file browser security ([c35683b](https://github.com/pandeptwidyaop/http-remote/commit/c35683b3335e24f9e5cef817e7d3ff1f61d29803))
+* add UI/UX improvements with toast notifications and confirm dialogs ([8dd3809](https://github.com/pandeptwidyaop/http-remote/commit/8dd380965d29c81cd08fe27611b1ec39c75da12d))
+
 # [2.1.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.0.0...v2.1.0) (2025-12-07)
 
 
