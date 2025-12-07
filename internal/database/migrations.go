@@ -248,6 +248,22 @@ func runVersionedMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Migration: Add sort_order column to commands table
+	migrationName = "2025_12_07_000001_add_sort_order_to_commands"
+	hasRun, err = hasMigrationRun(db, migrationName)
+	if err != nil {
+		return err
+	}
+
+	if !hasRun {
+		if err := addSortOrderToCommands(db); err != nil {
+			return err
+		}
+		if err := recordMigration(db, migrationName, batch); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -517,6 +533,59 @@ func addRoleToUsers(db *sql.DB) error {
 
 	// Set non-admin users to 'operator' role (for backward compatibility)
 	_, err = tx.Exec(`UPDATE users SET role = 'operator' WHERE is_admin = 0 OR is_admin IS NULL`)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// addSortOrderToCommands adds sort_order column to commands table for drag & drop ordering
+func addSortOrderToCommands(db *sql.DB) error {
+	// Check if column already exists
+	var count int
+	err := db.QueryRow(`
+		SELECT COUNT(*) FROM pragma_table_info('commands')
+		WHERE name = 'sort_order'
+	`).Scan(&count)
+
+	if err != nil {
+		return err
+	}
+
+	// Column already exists, skip migration
+	if count > 0 {
+		return nil
+	}
+
+	// Begin transaction
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Add sort_order column with default 0
+	_, err = tx.Exec(`ALTER TABLE commands ADD COLUMN sort_order INTEGER DEFAULT 0`)
+	if err != nil {
+		return err
+	}
+
+	// Set initial sort_order based on created_at for existing commands
+	// This ensures backward compatibility - older commands get lower sort_order
+	_, err = tx.Exec(`
+		UPDATE commands SET sort_order = (
+			SELECT COUNT(*) FROM commands c2
+			WHERE c2.app_id = commands.app_id
+			AND c2.created_at < commands.created_at
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Create index for efficient ordering queries
+	_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_commands_sort_order ON commands(app_id, sort_order)`)
 	if err != nil {
 		return err
 	}

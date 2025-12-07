@@ -194,4 +194,41 @@ func TestMigrationBackwardCompatibility(t *testing.T) {
 	if updatedAt == "" {
 		t.Error("expected updated_at to be set for new app")
 	}
+
+	// Verify commands table now has sort_order column
+	err = db.QueryRow(`
+		SELECT COUNT(*) FROM pragma_table_info('commands')
+		WHERE name = 'sort_order'
+	`).Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to check for sort_order column: %v", err)
+	}
+	if count != 1 {
+		t.Error("commands table should have sort_order column after migration")
+	}
+
+	// Verify existing command has sort_order set
+	var sortOrder int
+	err = db.QueryRow(`
+		SELECT sort_order FROM commands WHERE id = 'cmd-1'
+	`).Scan(&sortOrder)
+	if err != nil {
+		t.Fatalf("failed to query command sort_order: %v", err)
+	}
+	// Existing command should have sort_order = 0 (first command)
+	if sortOrder != 0 {
+		t.Errorf("expected sort_order 0 for first command, got %d", sortOrder)
+	}
+
+	// Verify index was created
+	err = db.QueryRow(`
+		SELECT COUNT(*) FROM sqlite_master
+		WHERE type = 'index' AND name = 'idx_commands_sort_order'
+	`).Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to check for sort_order index: %v", err)
+	}
+	if count != 1 {
+		t.Error("idx_commands_sort_order index should exist after migration")
+	}
 }

@@ -293,3 +293,56 @@ func (h *AppHandler) CreateCommand(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, cmd)
 }
+
+// ReorderCommands updates the order of commands for an application.
+func (h *AppHandler) ReorderCommands(c *gin.Context) {
+	appID := c.Param("id")
+
+	var req models.ReorderCommandsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.CommandIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "command_ids cannot be empty"})
+		return
+	}
+
+	if err := h.appService.ReorderCommands(appID, req.CommandIDs); err != nil {
+		if err == services.ErrAppNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "app not found"})
+			return
+		}
+		if err == services.ErrCommandNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "one or more commands not found or do not belong to this app"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Audit log
+	user, _ := c.Get(middleware.UserContextKey)
+	if u, ok := user.(*models.User); ok {
+		_ = h.auditService.Log(services.AuditLog{
+			UserID:       &u.ID,
+			Username:     u.Username,
+			Action:       "reorder",
+			ResourceType: "commands",
+			ResourceID:   appID,
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+			Details:      map[string]interface{}{"command_count": len(req.CommandIDs)},
+		})
+	}
+
+	// Return the updated command list
+	commands, err := h.appService.GetCommandsByAppID(appID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, commands)
+}

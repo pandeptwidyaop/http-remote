@@ -11,6 +11,7 @@ type Command struct {
 	Description    string    `json:"description"`
 	Command        string    `json:"command"`
 	TimeoutSeconds int       `json:"timeout_seconds"`
+	SortOrder      int       `json:"sort_order"`
 }
 
 // CreateCommandRequest contains the data for creating a new command.
@@ -27,4 +28,9 @@ type UpdateCommandRequest struct {
 	Description    string `json:"description"`
 	Command        string `json:"command"`
 	TimeoutSeconds int    `json:"timeout_seconds"`
+}
+
+// ReorderCommandsRequest contains the data for reordering commands.
+type ReorderCommandsRequest struct {
+	CommandIDs []string `json:"command_ids" binding:"required"`
 }

@@ -52,6 +52,7 @@ export const API_ENDPOINTS = {
   app: (id: string) => `/api/apps/${id}`,
   regenerateToken: (id: string) => `/api/apps/${id}/regenerate-token`,
   appCommands: (id: string) => `/api/apps/${id}/commands`,
+  reorderCommands: (id: string) => `/api/apps/${id}/commands/reorder`,
 
   // Commands
   commands: '/api/commands',

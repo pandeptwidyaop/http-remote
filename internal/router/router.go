@@ -131,6 +131,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 			protected.POST("/apps/:id/regenerate-token", appHandler.RegenerateToken)
 			protected.GET("/apps/:id/commands", appHandler.ListCommands)
 			protected.POST("/apps/:id/commands", appHandler.CreateCommand)
+			protected.POST("/apps/:id/commands/reorder", appHandler.ReorderCommands)
 
 			protected.GET("/commands/:id", commandHandler.Get)
 			protected.PUT("/commands/:id", commandHandler.Update)
