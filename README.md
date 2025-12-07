@@ -8,6 +8,63 @@
 
 Tool DevOps untuk melakukan remote deployment dan eksekusi command pada server private melalui protokol HTTP. Cocok untuk server yang hanya bisa diakses via port 80/443 tanpa VPN.
 
+## Screenshots
+
+<details>
+<summary>Click to expand screenshots</summary>
+
+### Login
+Modern glassmorphism login page with animated gradient background.
+
+![Login](screenshots/01-login.png)
+
+### Dashboard
+Overview of deployment statistics and recent activity.
+
+![Dashboard](screenshots/02-dashboard.png)
+
+### Apps Management
+Manage applications with deployment tokens for CI/CD integration.
+
+![Apps](screenshots/03-apps.png)
+
+### Commands
+Configure deployment commands with shell scripts.
+
+![Commands](screenshots/04-commands.png)
+
+### Execution History
+Track all command executions with status and output.
+
+![History](screenshots/05-history.png)
+
+### Terminal
+Interactive WebSocket-based terminal with full PTY support.
+
+![Terminal](screenshots/06-terminal.png)
+
+### File Browser
+Browse and manage server files securely.
+
+![Files](screenshots/07-files.png)
+
+### Audit Logs
+Track all user actions for security compliance.
+
+![Audit Logs](screenshots/10-audit-logs.png)
+
+### Settings
+Configure account settings and enable Two-Factor Authentication.
+
+![Settings](screenshots/11-settings.png)
+
+### Two-Factor Authentication Setup
+Enable 2FA with QR code for authenticator apps.
+
+![2FA Setup](screenshots/12-2fa-setup.png)
+
+</details>
+
 ## Features
 
 - **Modern React SPA UI** - Built with React 18, TypeScript, and Tailwind CSS
@@ -1075,50 +1132,6 @@ open coverage.html
 # Linux
 xdg-open coverage.html
 ```
-
----
-
-## Screenshots
-
-### Login
-Modern glassmorphism login page with animated gradient background.
-![Login](screenshots/01-login.png)
-
-### Dashboard
-Overview of deployment statistics and recent activity.
-![Dashboard](screenshots/02-dashboard.png)
-
-### Apps Management
-Manage applications with deployment tokens for CI/CD integration.
-![Apps](screenshots/03-apps.png)
-
-### Commands
-Configure deployment commands with shell scripts.
-![Commands](screenshots/04-commands.png)
-
-### Execution History
-Track all command executions with status and output.
-![History](screenshots/05-history.png)
-
-### Terminal
-Interactive WebSocket-based terminal with full PTY support.
-![Terminal](screenshots/06-terminal.png)
-
-### File Browser
-Browse and manage server files securely.
-![Files](screenshots/07-files.png)
-
-### Audit Logs
-Track all user actions for security compliance.
-![Audit Logs](screenshots/10-audit-logs.png)
-
-### Settings
-Configure account settings and enable Two-Factor Authentication.
-![Settings](screenshots/11-settings.png)
-
-### Two-Factor Authentication Setup
-Enable 2FA with QR code for authenticator apps.
-![2FA Setup](screenshots/12-2fa-setup.png)
 
 ---
 
