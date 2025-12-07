@@ -85,6 +85,48 @@ func FindAssetURL(release *GitHubRelease) (string, error) {
 	return "", fmt.Errorf("no release asset found for %s/%s", runtime.GOOS, runtime.GOARCH)
 }
 
+// createTempFile tries to create a temp file in multiple locations
+// This handles cases where /tmp is read-only (e.g., systemd PrivateTmp, containers)
+func createTempFile() (*os.File, error) {
+	// Try multiple temp directories in order of preference
+	tempDirs := []string{
+		os.TempDir(),      // System temp (usually /tmp)
+		"/var/tmp",        // Persistent temp (survives reboots)
+		os.Getenv("HOME"), // User home directory
+		".",               // Current working directory
+	}
+
+	// Also try directory of current executable
+	if execPath, err := os.Executable(); err == nil {
+		tempDirs = append([]string{filepath.Dir(execPath)}, tempDirs...)
+	}
+
+	var lastErr error
+	for _, dir := range tempDirs {
+		if dir == "" {
+			continue
+		}
+
+		// Check if directory exists and is writable
+		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+			continue
+		}
+
+		tmpFile, err := os.CreateTemp(dir, "http-remote-upgrade-*")
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		return tmpFile, nil
+	}
+
+	if lastErr != nil {
+		return nil, fmt.Errorf("all temp directories failed, last error: %w", lastErr)
+	}
+	return nil, fmt.Errorf("no writable temp directory found")
+}
+
 // Download downloads the new binary to a temporary file
 func Download(url string, progressFn func(downloaded, total int64)) (string, error) {
 	// #nosec G107 - URL is from GitHub API and validated by caller
@@ -98,8 +140,9 @@ func Download(url string, progressFn func(downloaded, total int64)) (string, err
 		return "", fmt.Errorf("failed to download: HTTP %d", resp.StatusCode)
 	}
 
-	// Create temp file
-	tmpFile, err := os.CreateTemp("", "http-remote-upgrade-*")
+	// Try to create temp file in different locations
+	// Some systems have read-only /tmp (e.g., Docker containers, restricted servers)
+	tmpFile, err := createTempFile()
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}

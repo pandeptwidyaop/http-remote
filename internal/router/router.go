@@ -158,6 +158,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 
 			// File management endpoints
 			protected.GET("/files", fileHandler.ListFiles)
+			protected.GET("/files/default-path", fileHandler.GetDefaultPath)
 			protected.GET("/files/read", fileHandler.ReadFile)
 			protected.GET("/files/download", fileHandler.DownloadFile)
 			protected.POST("/files/upload", fileHandler.UploadFile)

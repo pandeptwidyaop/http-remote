@@ -70,7 +70,7 @@ func sanitizeFilename(filename string) string {
 }
 
 // securePathWithConfig validates and resolves a path with configurable allowed/blocked paths
-func securePathWithConfig(inputPath string, allowedPaths, blockedPaths []string) (string, error) {
+func securePathWithConfig(inputPath string, allowedPaths, blockedPaths []string, disableDangerousCheck bool) (string, error) {
 	// Clean the path first
 	cleanPath := filepath.Clean(inputPath)
 
@@ -98,10 +98,12 @@ func securePathWithConfig(inputPath string, allowedPaths, blockedPaths []string)
 		}
 	}
 
-	// Check against dangerous system paths (always enforced)
-	for _, dp := range dangerousPaths {
-		if realPath == dp {
-			return "", fmt.Errorf("access to system path %s is forbidden", dp)
+	// Check against dangerous system paths (unless disabled)
+	if !disableDangerousCheck {
+		for _, dp := range dangerousPaths {
+			if realPath == dp {
+				return "", fmt.Errorf("access to system path %s is forbidden", dp)
+			}
 		}
 	}
 
@@ -134,11 +136,13 @@ func securePathWithConfig(inputPath string, allowedPaths, blockedPaths []string)
 // validatePath is a helper method that uses the handler's config
 func (h *FileHandler) validatePath(inputPath string) (string, error) {
 	var allowedPaths, blockedPaths []string
+	var disableDangerousCheck bool
 	if h.cfg != nil {
 		allowedPaths = h.cfg.Files.AllowedPaths
 		blockedPaths = h.cfg.Files.BlockedPaths
+		disableDangerousCheck = h.cfg.Files.DisableDangerousPathCheck
 	}
-	return securePathWithConfig(inputPath, allowedPaths, blockedPaths)
+	return securePathWithConfig(inputPath, allowedPaths, blockedPaths, disableDangerousCheck)
 }
 
 // FileInfo represents information about a file or directory
@@ -186,11 +190,35 @@ func (h *FileHandler) logFileAction(c *gin.Context, action, path string, details
 	})
 }
 
+// GetDefaultPath returns the default path for the file browser
+func (h *FileHandler) GetDefaultPath(c *gin.Context) {
+	defaultPath := h.getDefaultPath()
+	c.JSON(http.StatusOK, gin.H{
+		"default_path": defaultPath,
+	})
+}
+
+// getDefaultPath returns the configured default path or working directory
+func (h *FileHandler) getDefaultPath() string {
+	// Use configured default path if set
+	if h.cfg != nil && h.cfg.Files.DefaultPath != "" {
+		return h.cfg.Files.DefaultPath
+	}
+
+	// Default to working directory
+	if wd, err := os.Getwd(); err == nil {
+		return wd
+	}
+
+	// Fallback to root
+	return "/"
+}
+
 // ListFiles lists files and directories in a given path
 func (h *FileHandler) ListFiles(c *gin.Context) {
 	path := c.Query("path")
 	if path == "" {
-		path = "/"
+		path = h.getDefaultPath()
 	}
 
 	// Secure path validation (prevents symlink attacks)

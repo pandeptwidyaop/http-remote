@@ -22,8 +22,10 @@ type Config struct {
 
 // FilesConfig holds file browser security configuration.
 type FilesConfig struct {
-	AllowedPaths []string `yaml:"allowed_paths"` // Whitelist of allowed paths (if set, only these paths are accessible)
-	BlockedPaths []string `yaml:"blocked_paths"` // Blacklist of blocked paths (in addition to system paths)
+	DefaultPath               string   `yaml:"default_path"`                 // Default path when opening file browser (defaults to working directory)
+	AllowedPaths              []string `yaml:"allowed_paths"`                // Whitelist of allowed paths (if set, only these paths are accessible)
+	BlockedPaths              []string `yaml:"blocked_paths"`                // Blacklist of blocked paths (in addition to system paths)
+	DisableDangerousPathCheck bool     `yaml:"disable_dangerous_path_check"` // Disable system path protection (dangerous!)
 }
 
 // TerminalConfig holds terminal/PTY configuration.

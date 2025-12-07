@@ -128,10 +128,12 @@ function getFileIcon(name: string, isDir: boolean): React.ReactNode {
 }
 
 export default function Files() {
-  const [currentPath, setCurrentPath] = useState('/');
+  const [currentPath, setCurrentPath] = useState('');
+  const [pathInput, setPathInput] = useState('');
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [parentPath, setParentPath] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingDefault, setLoadingDefault] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Modal states
@@ -151,6 +153,26 @@ export default function Files() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Fetch default path on mount
+  useEffect(() => {
+    const fetchDefaultPath = async () => {
+      try {
+        const data = await api.get<{ default_path: string }>('/api/files/default-path');
+        setCurrentPath(data.default_path);
+        setPathInput(data.default_path);
+        fetchFiles(data.default_path);
+      } catch {
+        // Fallback to root
+        setCurrentPath('/');
+        setPathInput('/');
+        fetchFiles('/');
+      } finally {
+        setLoadingDefault(false);
+      }
+    };
+    fetchDefaultPath();
+  }, []);
+
   // Fetch files
   const fetchFiles = useCallback(async (path: string) => {
     setLoading(true);
@@ -160,15 +182,12 @@ export default function Files() {
       setFiles(data.files || []);
       setParentPath(data.parent_path || '');
       setCurrentPath(data.path);
+      setPathInput(data.path);
     } catch (err: any) {
       setError(err.message || 'Failed to load files');
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    fetchFiles(currentPath);
   }, []);
 
   // Navigate to folder
@@ -379,37 +398,67 @@ export default function Files() {
 
       {/* Navigation */}
       <Card className="p-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={goHome}
-            className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-            title="Home"
-          >
-            <Home className="h-4 w-4 text-gray-600" />
-          </button>
-          <button
-            onClick={goBack}
-            disabled={!parentPath}
-            className="p-2 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Back"
-          >
-            <ArrowLeft className="h-4 w-4 text-gray-600" />
-          </button>
-          <button
-            onClick={refresh}
-            className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw className={`h-4 w-4 text-gray-600 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-
-          <div className="h-6 w-px bg-gray-300 mx-2" />
-
-          {/* Breadcrumb */}
-          <div className="flex items-center gap-1 text-sm">
+        <div className="flex flex-col gap-3">
+          {/* Path input row */}
+          <div className="flex items-center gap-2">
             <button
               onClick={goHome}
-              className="text-blue-600 hover:text-blue-800 hover:underline"
+              className="p-2 rounded-md hover:bg-gray-100 transition-colors flex-shrink-0"
+              title="Home (root)"
+            >
+              <Home className="h-4 w-4 text-gray-600" />
+            </button>
+            <button
+              onClick={goBack}
+              disabled={!parentPath}
+              className="p-2 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+              title="Back"
+            >
+              <ArrowLeft className="h-4 w-4 text-gray-600" />
+            </button>
+            <button
+              onClick={refresh}
+              className="p-2 rounded-md hover:bg-gray-100 transition-colors flex-shrink-0"
+              title="Refresh"
+            >
+              <RefreshCw className={`h-4 w-4 text-gray-600 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+
+            <div className="h-6 w-px bg-gray-300 mx-1 flex-shrink-0" />
+
+            {/* Path input */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (pathInput.trim()) {
+                  navigateTo(pathInput.trim());
+                }
+              }}
+              className="flex-1 flex items-center gap-2"
+            >
+              <input
+                type="text"
+                value={pathInput}
+                onChange={(e) => setPathInput(e.target.value)}
+                placeholder="Enter path..."
+                className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono bg-gray-50"
+              />
+              <Button
+                type="submit"
+                variant="secondary"
+                size="sm"
+                disabled={!pathInput.trim() || pathInput === currentPath}
+              >
+                Go
+              </Button>
+            </form>
+          </div>
+
+          {/* Breadcrumb row */}
+          <div className="flex items-center gap-1 text-sm overflow-x-auto pb-1">
+            <button
+              onClick={goHome}
+              className="text-blue-600 hover:text-blue-800 hover:underline flex-shrink-0"
             >
               /
             </button>
@@ -417,7 +466,7 @@ export default function Files() {
               const path = '/' + breadcrumbs.slice(0, index + 1).join('/');
               const isLast = index === breadcrumbs.length - 1;
               return (
-                <span key={path} className="flex items-center gap-1">
+                <span key={path} className="flex items-center gap-1 flex-shrink-0">
                   <ChevronRight className="h-4 w-4 text-gray-400" />
                   {isLast ? (
                     <span className="text-gray-900 font-medium">{crumb}</span>

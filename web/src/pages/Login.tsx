@@ -1,6 +1,6 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Lock, Shield, Terminal, Server, ArrowRight, Github } from 'lucide-react';
+import { User, Lock, Shield, Terminal, Server, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import Button from '@/components/ui/Button';
 
@@ -88,86 +88,89 @@ export default function Login() {
                 </div>
               )}
 
-              {requiresTOTP && (
-                <div className="bg-blue-500/20 border border-blue-500/30 text-blue-200 px-4 py-3 rounded-xl text-sm backdrop-blur-sm flex items-center gap-2">
-                  <Shield className="w-4 h-4" />
-                  Enter your 2FA verification code
-                </div>
-              )}
-
-              {/* Username field */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300 block">
-                  Username
-                </label>
-                <div className={`relative group transition-all duration-300 ${focusedField === 'username' ? 'scale-[1.02]' : ''}`}>
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <User className={`w-5 h-5 transition-colors duration-300 ${focusedField === 'username' ? 'text-blue-400' : 'text-gray-500'}`} />
-                  </div>
-                  <input
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    onFocus={() => setFocusedField('username')}
-                    onBlur={() => setFocusedField(null)}
-                    required
-                    autoComplete="username"
-                    placeholder="Enter your username"
-                    disabled={requiresTOTP}
-                    className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 disabled:opacity-50"
-                  />
-                </div>
-              </div>
-
-              {/* Password field */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-300 block">
-                  Password
-                </label>
-                <div className={`relative group transition-all duration-300 ${focusedField === 'password' ? 'scale-[1.02]' : ''}`}>
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className={`w-5 h-5 transition-colors duration-300 ${focusedField === 'password' ? 'text-blue-400' : 'text-gray-500'}`} />
-                  </div>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onFocus={() => setFocusedField('password')}
-                    onBlur={() => setFocusedField(null)}
-                    required
-                    autoComplete="current-password"
-                    placeholder="Enter your password"
-                    disabled={requiresTOTP}
-                    className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 disabled:opacity-50"
-                  />
-                </div>
-              </div>
-
-              {/* 2FA Code field */}
-              {requiresTOTP && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-300 block">
-                    2FA Code
-                  </label>
-                  <div className={`relative group transition-all duration-300 ${focusedField === 'totp' ? 'scale-[1.02]' : ''}`}>
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Shield className={`w-5 h-5 transition-colors duration-300 ${focusedField === 'totp' ? 'text-blue-400' : 'text-gray-500'}`} />
+              {/* Show either login fields OR 2FA field, not both */}
+              {!requiresTOTP ? (
+                <>
+                  {/* Username field */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-300 block">
+                      Username
+                    </label>
+                    <div className={`relative group transition-all duration-300 ${focusedField === 'username' ? 'scale-[1.02]' : ''}`}>
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <User className={`w-5 h-5 transition-colors duration-300 ${focusedField === 'username' ? 'text-blue-400' : 'text-gray-500'}`} />
+                      </div>
+                      <input
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        onFocus={() => setFocusedField('username')}
+                        onBlur={() => setFocusedField(null)}
+                        required
+                        autoComplete="username"
+                        placeholder="Enter your username"
+                        className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300"
+                      />
                     </div>
-                    <input
-                      type="text"
-                      value={totpCode}
-                      onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      onFocus={() => setFocusedField('totp')}
-                      onBlur={() => setFocusedField(null)}
-                      required
-                      maxLength={6}
-                      autoComplete="off"
-                      placeholder="000000"
-                      autoFocus
-                      className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 tracking-[0.5em] text-center font-mono text-lg"
-                    />
                   </div>
-                </div>
+
+                  {/* Password field */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-300 block">
+                      Password
+                    </label>
+                    <div className={`relative group transition-all duration-300 ${focusedField === 'password' ? 'scale-[1.02]' : ''}`}>
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Lock className={`w-5 h-5 transition-colors duration-300 ${focusedField === 'password' ? 'text-blue-400' : 'text-gray-500'}`} />
+                      </div>
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        onFocus={() => setFocusedField('password')}
+                        onBlur={() => setFocusedField(null)}
+                        required
+                        autoComplete="current-password"
+                        placeholder="Enter your password"
+                        className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300"
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* 2FA step - clean simple view */}
+                  <div className="text-center mb-2">
+                    <p className="text-gray-300 text-sm">
+                      Enter the 6-digit code from your authenticator app
+                    </p>
+                  </div>
+
+                  {/* 2FA Code field */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-300 block">
+                      Verification Code
+                    </label>
+                    <div className={`relative group transition-all duration-300 ${focusedField === 'totp' ? 'scale-[1.02]' : ''}`}>
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Shield className={`w-5 h-5 transition-colors duration-300 ${focusedField === 'totp' ? 'text-blue-400' : 'text-gray-500'}`} />
+                      </div>
+                      <input
+                        type="text"
+                        value={totpCode}
+                        onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        onFocus={() => setFocusedField('totp')}
+                        onBlur={() => setFocusedField(null)}
+                        required
+                        maxLength={6}
+                        autoComplete="off"
+                        placeholder="000000"
+                        autoFocus
+                        className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 tracking-[0.5em] text-center font-mono text-lg"
+                      />
+                    </div>
+                  </div>
+                </>
               )}
 
               {/* Submit button */}
@@ -178,7 +181,7 @@ export default function Login() {
                 loading={loading}
                 className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold py-4 rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all duration-300 flex items-center justify-center gap-2 group"
               >
-                <span>Sign In</span>
+                <span>{requiresTOTP ? 'Verify' : 'Sign In'}</span>
                 {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
               </Button>
 
@@ -192,28 +195,17 @@ export default function Login() {
                     clearError();
                   }}
                 >
-                  Back to login
+                  ← Back to login
                 </button>
               )}
             </form>
           </div>
         </div>
 
-        {/* Footer text with GitHub link */}
-        <div className="text-center mt-6 space-y-2">
-          <p className="text-gray-500 text-sm">
-            Secure access to your deployment infrastructure
-          </p>
-          <a
-            href="https://github.com/pandeptwidyaop/http-remote"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-gray-400 hover:text-white text-sm transition-colors duration-300"
-          >
-            <Github className="w-4 h-4" />
-            <span>View on GitHub</span>
-          </a>
-        </div>
+        {/* Footer text */}
+        <p className="text-center mt-6 text-gray-500 text-sm">
+          Secure access to your deployment infrastructure
+        </p>
       </div>
     </div>
   );
