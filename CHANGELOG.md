@@ -1,3 +1,10 @@
+## [2.4.2](https://github.com/pandeptwidyaop/http-remote/compare/v2.4.1...v2.4.2) (2025-12-07)
+
+
+### Bug Fixes
+
+* make TestFileHandler_DeleteFile_SystemPath cross-platform compatible ([03b435d](https://github.com/pandeptwidyaop/http-remote/commit/03b435dc951ef8825020b313008395e804857a27))
+
 ## [2.4.1](https://github.com/pandeptwidyaop/http-remote/compare/v2.4.0...v2.4.1) (2025-12-07)
 
 
