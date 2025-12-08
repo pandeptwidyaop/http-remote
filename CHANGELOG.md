@@ -1,3 +1,10 @@
+## [2.7.1](https://github.com/pandeptwidyaop/http-remote/compare/v2.7.0...v2.7.1) (2025-12-08)
+
+
+### Bug Fixes
+
+* resolve golangci-lint issues ([097019c](https://github.com/pandeptwidyaop/http-remote/commit/097019cc9e5afc275132a4c445e82c4beb703319))
+
 # [2.7.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.6.0...v2.7.0) (2025-12-07)
 
 
