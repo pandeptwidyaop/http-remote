@@ -44,8 +44,8 @@ type BackupInfo struct {
 	Size      int64     `json:"size"`
 }
 
-// UpgradeProgress represents progress information during upgrade.
-type UpgradeProgress struct {
+// Progress represents progress information during upgrade.
+type Progress struct {
 	Stage      string `json:"stage"`       // "checking", "downloading", "installing", "complete", "error"
 	Percent    int    `json:"percent"`     // 0-100
 	Message    string `json:"message"`     // Human-readable message
@@ -248,18 +248,19 @@ func Install(tmpPath string) error {
 }
 
 // copyFile copies a file from src to dst
+// #nosec G304 - src/dst are internal paths from backup/rollback operations
 func copyFile(src, dst string) error {
 	sourceFile, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer sourceFile.Close()
+	defer func() { _ = sourceFile.Close() }()
 
 	destFile, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer destFile.Close()
+	defer func() { _ = destFile.Close() }()
 
 	if _, err := io.Copy(destFile, sourceFile); err != nil {
 		return err
@@ -274,7 +275,7 @@ func copyFile(src, dst string) error {
 }
 
 // rotateBackups removes old backups, keeping only the most recent maxBackups
-func rotateBackups(execPath string) error {
+func rotateBackups(_ string) error {
 	backups, err := ListBackups()
 	if err != nil {
 		return err
@@ -410,6 +411,7 @@ func Rollback(backupPath string) error {
 	}
 
 	// Make executable
+	// #nosec G302 - executable needs to be executable by owner and group
 	if err := os.Chmod(execPath, 0755); err != nil {
 		return fmt.Errorf("failed to set permissions: %w", err)
 	}
@@ -470,8 +472,8 @@ func Run(force bool) error {
 }
 
 // RunWithProgress performs the upgrade with progress callbacks for API use
-func RunWithProgress(force bool, progressFn func(UpgradeProgress)) (*GitHubRelease, error) {
-	progressFn(UpgradeProgress{
+func RunWithProgress(force bool, progressFn func(Progress)) (*GitHubRelease, error) {
+	progressFn(Progress{
 		Stage:   "checking",
 		Percent: 0,
 		Message: "Checking for updates...",
@@ -479,7 +481,7 @@ func RunWithProgress(force bool, progressFn func(UpgradeProgress)) (*GitHubRelea
 
 	release, err := CheckLatestVersion()
 	if err != nil {
-		progressFn(UpgradeProgress{
+		progressFn(Progress{
 			Stage:   "error",
 			Percent: 0,
 			Message: err.Error(),
@@ -487,7 +489,7 @@ func RunWithProgress(force bool, progressFn func(UpgradeProgress)) (*GitHubRelea
 		return nil, err
 	}
 
-	progressFn(UpgradeProgress{
+	progressFn(Progress{
 		Stage:      "checking",
 		Percent:    10,
 		Message:    fmt.Sprintf("Latest version: %s", release.TagName),
@@ -495,7 +497,7 @@ func RunWithProgress(force bool, progressFn func(UpgradeProgress)) (*GitHubRelea
 	})
 
 	if !force && !NeedsUpgrade(release.TagName) {
-		progressFn(UpgradeProgress{
+		progressFn(Progress{
 			Stage:      "complete",
 			Percent:    100,
 			Message:    "Already running the latest version",
@@ -506,7 +508,7 @@ func RunWithProgress(force bool, progressFn func(UpgradeProgress)) (*GitHubRelea
 
 	assetURL, err := FindAssetURL(release)
 	if err != nil {
-		progressFn(UpgradeProgress{
+		progressFn(Progress{
 			Stage:   "error",
 			Percent: 10,
 			Message: err.Error(),
@@ -514,7 +516,7 @@ func RunWithProgress(force bool, progressFn func(UpgradeProgress)) (*GitHubRelea
 		return nil, err
 	}
 
-	progressFn(UpgradeProgress{
+	progressFn(Progress{
 		Stage:      "downloading",
 		Percent:    15,
 		Message:    "Starting download...",
@@ -525,7 +527,7 @@ func RunWithProgress(force bool, progressFn func(UpgradeProgress)) (*GitHubRelea
 		if total > 0 {
 			// Map download progress from 15% to 85%
 			pct := 15 + int(float64(downloaded)/float64(total)*70)
-			progressFn(UpgradeProgress{
+			progressFn(Progress{
 				Stage:      "downloading",
 				Percent:    pct,
 				Message:    fmt.Sprintf("Downloading: %d%%", int(float64(downloaded)/float64(total)*100)),
@@ -534,7 +536,7 @@ func RunWithProgress(force bool, progressFn func(UpgradeProgress)) (*GitHubRelea
 		}
 	})
 	if err != nil {
-		progressFn(UpgradeProgress{
+		progressFn(Progress{
 			Stage:   "error",
 			Percent: 50,
 			Message: err.Error(),
@@ -542,7 +544,7 @@ func RunWithProgress(force bool, progressFn func(UpgradeProgress)) (*GitHubRelea
 		return nil, err
 	}
 
-	progressFn(UpgradeProgress{
+	progressFn(Progress{
 		Stage:      "installing",
 		Percent:    90,
 		Message:    "Installing new version...",
@@ -551,7 +553,7 @@ func RunWithProgress(force bool, progressFn func(UpgradeProgress)) (*GitHubRelea
 
 	if err := Install(tmpPath); err != nil {
 		_ = os.Remove(tmpPath)
-		progressFn(UpgradeProgress{
+		progressFn(Progress{
 			Stage:   "error",
 			Percent: 90,
 			Message: err.Error(),
@@ -559,7 +561,7 @@ func RunWithProgress(force bool, progressFn func(UpgradeProgress)) (*GitHubRelea
 		return nil, err
 	}
 
-	progressFn(UpgradeProgress{
+	progressFn(Progress{
 		Stage:      "complete",
 		Percent:    100,
 		Message:    fmt.Sprintf("Successfully upgraded to %s! Restart required.", release.TagName),

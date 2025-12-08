@@ -101,7 +101,7 @@ func (h *SystemHandler) Upgrade(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req)
 
 	// Audit log the upgrade attempt
-	h.auditService.Log(services.AuditLog{
+	_ = h.auditService.Log(services.AuditLog{
 		UserID:       &u.ID,
 		Username:     u.Username,
 		Action:       "system_upgrade_started",
@@ -112,14 +112,14 @@ func (h *SystemHandler) Upgrade(c *gin.Context) {
 	})
 
 	// Perform upgrade with progress tracking
-	var lastProgress upgrade.UpgradeProgress
-	release, err := upgrade.RunWithProgress(req.Force, func(progress upgrade.UpgradeProgress) {
+	var lastProgress upgrade.Progress
+	release, err := upgrade.RunWithProgress(req.Force, func(progress upgrade.Progress) {
 		lastProgress = progress
 	})
 
 	if err != nil {
 		// Audit log the failure
-		h.auditService.Log(services.AuditLog{
+		_ = h.auditService.Log(services.AuditLog{
 			UserID:       &u.ID,
 			Username:     u.Username,
 			Action:       "system_upgrade_failed",
@@ -137,7 +137,7 @@ func (h *SystemHandler) Upgrade(c *gin.Context) {
 	}
 
 	// Audit log success
-	h.auditService.Log(services.AuditLog{
+	_ = h.auditService.Log(services.AuditLog{
 		UserID:       &u.ID,
 		Username:     u.Username,
 		Action:       "system_upgrade_completed",
@@ -192,7 +192,7 @@ func (h *SystemHandler) Restart(c *gin.Context) {
 	}
 
 	// Audit log the restart
-	h.auditService.Log(services.AuditLog{
+	_ = h.auditService.Log(services.AuditLog{
 		UserID:       &u.ID,
 		Username:     u.Username,
 		Action:       "system_restart",
@@ -280,7 +280,7 @@ func (h *SystemHandler) Rollback(c *gin.Context) {
 	}
 
 	// Audit log the rollback attempt
-	h.auditService.Log(services.AuditLog{
+	_ = h.auditService.Log(services.AuditLog{
 		UserID:       &u.ID,
 		Username:     u.Username,
 		Action:       "system_rollback_started",
@@ -292,7 +292,7 @@ func (h *SystemHandler) Rollback(c *gin.Context) {
 
 	// Perform rollback
 	if err := upgrade.Rollback(req.BackupPath); err != nil {
-		h.auditService.Log(services.AuditLog{
+		_ = h.auditService.Log(services.AuditLog{
 			UserID:       &u.ID,
 			Username:     u.Username,
 			Action:       "system_rollback_failed",
@@ -307,7 +307,7 @@ func (h *SystemHandler) Rollback(c *gin.Context) {
 	}
 
 	// Audit log success
-	h.auditService.Log(services.AuditLog{
+	_ = h.auditService.Log(services.AuditLog{
 		UserID:       &u.ID,
 		Username:     u.Username,
 		Action:       "system_rollback_completed",

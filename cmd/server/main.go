@@ -212,7 +212,7 @@ func runInstallService() {
 		os.Exit(1)
 	}
 
-	cfg := service.ServiceConfig{
+	cfg := service.Config{
 		ExecPath:   execPath,
 		ConfigPath: *configPath,
 		User:       *user,

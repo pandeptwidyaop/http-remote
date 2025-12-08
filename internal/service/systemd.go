@@ -17,8 +17,8 @@ const (
 	serviceFilePath = "/etc/systemd/system/http-remote.service"
 )
 
-// ServiceStatus represents the status of the systemd service.
-type ServiceStatus struct {
+// Info represents the status of the systemd service.
+type Info struct {
 	IsRunning   bool   `json:"is_running"`
 	IsEnabled   bool   `json:"is_enabled"`
 	IsInstalled bool   `json:"is_installed"`
@@ -26,8 +26,8 @@ type ServiceStatus struct {
 	SubState    string `json:"sub_state"`
 }
 
-// ServiceConfig holds configuration for service installation.
-type ServiceConfig struct {
+// Config holds configuration for service installation.
+type Config struct {
 	ExecPath   string
 	ConfigPath string
 	User       string
@@ -78,7 +78,7 @@ func IsRoot() bool {
 }
 
 // GenerateServiceFile generates the systemd service file content.
-func GenerateServiceFile(cfg ServiceConfig) (string, error) {
+func GenerateServiceFile(cfg Config) (string, error) {
 	tmpl, err := template.New("service").Parse(serviceTemplate)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse service template: %w", err)
@@ -93,7 +93,7 @@ func GenerateServiceFile(cfg ServiceConfig) (string, error) {
 }
 
 // Install installs and starts the systemd service.
-func Install(cfg ServiceConfig) error {
+func Install(cfg Config) error {
 	if !IsLinux() {
 		return fmt.Errorf("service installation only supported on Linux")
 	}
@@ -113,6 +113,7 @@ func Install(cfg ServiceConfig) error {
 	}
 
 	// Write service file
+	// #nosec G306 - service file needs to be readable by systemd
 	if err := os.WriteFile(serviceFilePath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write service file: %w", err)
 	}
@@ -169,8 +170,8 @@ func Uninstall() error {
 }
 
 // Status returns the current service status.
-func Status() (*ServiceStatus, error) {
-	status := &ServiceStatus{}
+func Status() (*Info, error) {
+	status := &Info{}
 
 	if !IsLinux() || !IsSystemdAvailable() {
 		return status, nil
@@ -255,11 +256,11 @@ func IsRunningAsService() bool {
 }
 
 // GetDefaultConfig returns default service configuration.
-func GetDefaultConfig() ServiceConfig {
+func GetDefaultConfig() Config {
 	execPath, _ := os.Executable()
 	execPath, _ = filepath.EvalSymlinks(execPath)
 
-	return ServiceConfig{
+	return Config{
 		ExecPath:   execPath,
 		ConfigPath: "/etc/http-remote/config.yaml",
 		User:       "root",
@@ -279,6 +280,7 @@ func runSystemctl(args ...string) error {
 
 // getSystemctlProperty gets a systemd property value.
 func getSystemctlProperty(property string) (string, error) {
+	// #nosec G204 - property is from internal code, not user input
 	cmd := exec.Command("systemctl", "show", serviceName, "--property="+property, "--value")
 	output, err := cmd.Output()
 	if err != nil {
