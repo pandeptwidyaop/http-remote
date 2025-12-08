@@ -140,6 +140,11 @@ func main() {
 	executorService := services.NewExecutorService(db, cfg, appService)
 	auditService := services.NewAuditService(db)
 
+	// Initialize metrics collector
+	metricsCollector := services.NewMetricsCollector(db.DB, &cfg.Metrics)
+	metricsCollector.Start()
+	defer metricsCollector.Stop()
+
 	if err := authService.EnsureAdminUser(); err != nil {
 		if errors.Is(err, services.ErrDefaultPassword) {
 			log.Println("")
@@ -160,7 +165,7 @@ func main() {
 		log.Fatalf("Failed to ensure admin user: %v", err)
 	}
 
-	r := router.New(cfg, authService, appService, executorService, auditService)
+	r := router.New(cfg, authService, appService, executorService, auditService, metricsCollector)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("HTTP Remote %s starting on %s", version.Version, addr)

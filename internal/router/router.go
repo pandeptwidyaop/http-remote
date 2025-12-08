@@ -17,7 +17,7 @@ import (
 )
 
 // New creates and configures a new Gin router with all routes and middleware.
-func New(cfg *config.Config, authService *services.AuthService, appService *services.AppService, executorService *services.ExecutorService, auditService *services.AuditService) *gin.Engine {
+func New(cfg *config.Config, authService *services.AuthService, appService *services.AppService, executorService *services.ExecutorService, auditService *services.AuditService, metricsCollector ...*services.MetricsCollector) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	r := gin.New()
@@ -85,6 +85,13 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	fileHandler := handlers.NewFileHandler(cfg, auditService)
 	userHandler := handlers.NewUserHandler(authService, auditService, cfg)
 	systemHandler := handlers.NewSystemHandler(auditService)
+
+	// Initialize metrics handler (optional metrics collector)
+	var collector *services.MetricsCollector
+	if len(metricsCollector) > 0 && metricsCollector[0] != nil {
+		collector = metricsCollector[0]
+	}
+	metricsHandler := handlers.NewMetricsHandler(collector, cfg.Database.Path)
 
 	// Rate limiters
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)   // 5 req/min for login
@@ -183,6 +190,17 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 			protected.POST("/system/restart", systemHandler.Restart)
 			protected.GET("/system/rollback-versions", systemHandler.ListRollbackVersions)
 			protected.POST("/system/rollback", systemHandler.Rollback)
+
+			// Metrics endpoints
+			protected.GET("/metrics/system", metricsHandler.GetSystem)
+			protected.GET("/metrics/docker", metricsHandler.GetDocker)
+			protected.GET("/metrics/docker/:id", metricsHandler.GetContainer)
+			protected.GET("/metrics/docker/:id/history", metricsHandler.GetContainerHistory)
+			protected.GET("/metrics/summary", metricsHandler.GetSummary)
+			protected.GET("/metrics/history", metricsHandler.GetHistorical)
+			protected.GET("/metrics/storage", metricsHandler.GetDatabaseInfo)
+			protected.POST("/metrics/prune", metricsHandler.PruneMetrics)
+			protected.POST("/metrics/vacuum", metricsHandler.VacuumDatabase)
 		}
 	}
 

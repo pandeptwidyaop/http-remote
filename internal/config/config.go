@@ -18,6 +18,7 @@ type Config struct {
 	Terminal  TerminalConfig  `yaml:"terminal"`
 	Security  SecurityConfig  `yaml:"security"`
 	Files     FilesConfig     `yaml:"files"`
+	Metrics   MetricsConfig   `yaml:"metrics"`
 }
 
 // FilesConfig holds file browser security configuration.
@@ -102,6 +103,59 @@ type ExecutionConfig struct {
 type AdminConfig struct {
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
+}
+
+// MetricsConfig holds metrics collection and retention configuration.
+type MetricsConfig struct {
+	Enabled           *bool  `yaml:"enabled"`            // Enable metrics collection (default: true)
+	CollectionInterval string `yaml:"collection_interval"` // How often to collect metrics (default: 1m)
+	RetentionDays     int    `yaml:"retention_days"`     // How long to keep raw metrics (default: 7)
+	HourlyRetentionDays int  `yaml:"hourly_retention_days"` // How long to keep hourly aggregates (default: 30)
+	DailyRetentionDays int   `yaml:"daily_retention_days"`  // How long to keep daily aggregates (default: 365)
+}
+
+// IsEnabled returns whether metrics collection is enabled (defaults to true).
+func (c *MetricsConfig) IsEnabled() bool {
+	if c.Enabled == nil {
+		return true
+	}
+	return *c.Enabled
+}
+
+// GetCollectionInterval returns the collection interval as time.Duration.
+func (c *MetricsConfig) GetCollectionInterval() time.Duration {
+	if c.CollectionInterval == "" {
+		return 1 * time.Minute
+	}
+	d, err := time.ParseDuration(c.CollectionInterval)
+	if err != nil {
+		return 1 * time.Minute
+	}
+	return d
+}
+
+// GetRetentionDays returns raw metrics retention days (defaults to 7).
+func (c *MetricsConfig) GetRetentionDays() int {
+	if c.RetentionDays == 0 {
+		return 7
+	}
+	return c.RetentionDays
+}
+
+// GetHourlyRetentionDays returns hourly aggregates retention days (defaults to 30).
+func (c *MetricsConfig) GetHourlyRetentionDays() int {
+	if c.HourlyRetentionDays == 0 {
+		return 30
+	}
+	return c.HourlyRetentionDays
+}
+
+// GetDailyRetentionDays returns daily aggregates retention days (defaults to 365).
+func (c *MetricsConfig) GetDailyRetentionDays() int {
+	if c.DailyRetentionDays == 0 {
+		return 365
+	}
+	return c.DailyRetentionDays
 }
 
 // GetSessionDuration parses and returns the session duration as time.Duration.

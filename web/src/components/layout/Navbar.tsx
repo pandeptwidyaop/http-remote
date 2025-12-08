@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Package, History, FileText, Settings, Terminal, X, ArrowUpCircle, FolderOpen, Users, Menu } from 'lucide-react';
+import { LogOut, LayoutDashboard, Package, History, FileText, Settings, Terminal, X, ArrowUpCircle, FolderOpen, Users, Menu, Activity } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useVersionStore } from '@/store/versionStore';
 import Button from '@/components/ui/Button';
@@ -31,6 +31,7 @@ export default function Navbar() {
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/apps', label: 'Apps', icon: Package },
     { path: '/executions', label: 'History', icon: History },
+    { path: '/monitoring', label: 'Monitoring', icon: Activity },
     { path: '/terminal', label: 'Terminal', icon: Terminal },
     { path: '/files', label: 'Files', icon: FolderOpen },
     { path: '/audit-logs', label: 'Audit Logs', icon: FileText },

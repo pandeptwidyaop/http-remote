@@ -264,6 +264,22 @@ func runVersionedMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Migration: Add system_metrics table for historical metrics
+	migrationName = "2025_12_09_000001_add_system_metrics"
+	hasRun, err = hasMigrationRun(db, migrationName)
+	if err != nil {
+		return err
+	}
+
+	if !hasRun {
+		if err := addSystemMetricsTables(db); err != nil {
+			return err
+		}
+		if err := recordMigration(db, migrationName, batch); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -591,6 +607,117 @@ func addSortOrderToCommands(db *sql.DB) error {
 	}
 
 	return tx.Commit()
+}
+
+// addSystemMetricsTables creates tables for storing historical system metrics
+func addSystemMetricsTables(db *sql.DB) error {
+	// Create system_metrics table for raw metrics
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS system_metrics (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			cpu_percent REAL NOT NULL,
+			memory_percent REAL NOT NULL,
+			memory_used INTEGER NOT NULL,
+			memory_total INTEGER NOT NULL,
+			disk_data TEXT NOT NULL,
+			network_data TEXT NOT NULL,
+			load_avg TEXT,
+			uptime INTEGER
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Create docker_metrics table for raw container metrics
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS docker_metrics (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			container_id TEXT NOT NULL,
+			container_name TEXT NOT NULL,
+			image TEXT NOT NULL,
+			state TEXT NOT NULL,
+			cpu_percent REAL NOT NULL,
+			memory_percent REAL NOT NULL,
+			memory_used INTEGER NOT NULL,
+			memory_limit INTEGER NOT NULL,
+			network_rx INTEGER NOT NULL,
+			network_tx INTEGER NOT NULL,
+			block_read INTEGER NOT NULL,
+			block_write INTEGER NOT NULL
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Create system_metrics_hourly for hourly aggregates
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS system_metrics_hourly (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			timestamp DATETIME NOT NULL,
+			cpu_avg REAL NOT NULL,
+			cpu_max REAL NOT NULL,
+			memory_avg REAL NOT NULL,
+			memory_max REAL NOT NULL,
+			disk_data TEXT NOT NULL,
+			network_rx_total INTEGER NOT NULL,
+			network_tx_total INTEGER NOT NULL,
+			sample_count INTEGER NOT NULL
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Create system_metrics_daily for daily aggregates
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS system_metrics_daily (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			timestamp DATETIME NOT NULL,
+			cpu_avg REAL NOT NULL,
+			cpu_max REAL NOT NULL,
+			memory_avg REAL NOT NULL,
+			memory_max REAL NOT NULL,
+			disk_data TEXT NOT NULL,
+			network_rx_total INTEGER NOT NULL,
+			network_tx_total INTEGER NOT NULL,
+			sample_count INTEGER NOT NULL
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Create indexes for efficient queries
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_system_metrics_timestamp ON system_metrics(timestamp)`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_docker_metrics_timestamp ON docker_metrics(timestamp)`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_docker_metrics_container_id ON docker_metrics(container_id, timestamp)`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_system_metrics_hourly_timestamp ON system_metrics_hourly(timestamp)`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_system_metrics_daily_timestamp ON system_metrics_daily(timestamp)`)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // add2FAToUsers adds 2FA fields to users table

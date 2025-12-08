@@ -19,6 +19,7 @@ import Settings from './pages/Settings';
 import Terminal from './pages/Terminal';
 import Files from './pages/Files';
 import Users from './pages/Users';
+import Monitoring from './pages/Monitoring';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -157,6 +158,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Users />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/monitoring"
+          element={
+            <ProtectedRoute>
+              <Monitoring />
             </ProtectedRoute>
           }
         />

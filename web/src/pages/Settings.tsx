@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, Key, AlertCircle, Lock, Server, Download, RotateCcw, RefreshCw } from 'lucide-react';
+import { Shield, Key, AlertCircle, Lock, Server, Download, RotateCcw, RefreshCw, Database, Trash2 } from 'lucide-react';
 import { api } from '@/api/client';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -43,6 +43,15 @@ interface VersionCheck {
   release_notes: string;
 }
 
+interface StorageInfo {
+  path: string;
+  size_bytes: number;
+  size_formatted: string;
+  metrics_count: number;
+  oldest_timestamp?: string;
+  newest_timestamp?: string;
+}
+
 export default function Settings() {
   const [status, setStatus] = useState<TwoFAStatus>({ enabled: false, setup: false });
   const [loading, setLoading] = useState(true);
@@ -74,9 +83,18 @@ export default function Settings() {
   const [isRollbackModalOpen, setIsRollbackModalOpen] = useState(false);
   const [selectedBackup, setSelectedBackup] = useState<string>('');
 
+  // Storage management state
+  const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
+  const [isPruneModalOpen, setIsPruneModalOpen] = useState(false);
+  const [pruneDate, setPruneDate] = useState<string>('');
+  const [pruning, setPruning] = useState(false);
+  const [vacuuming, setVacuuming] = useState(false);
+  const [storageMessage, setStorageMessage] = useState<string | null>(null);
+
   useEffect(() => {
     fetchStatus();
     fetchSystemStatus();
+    fetchStorageInfo();
   }, []);
 
   const fetchStatus = async () => {
@@ -103,6 +121,54 @@ export default function Settings() {
       setBackups(backupData?.backups || []);
     } catch (error) {
       console.error('Failed to fetch system status:', error);
+    }
+  };
+
+  const fetchStorageInfo = async () => {
+    try {
+      const data = await api.get<StorageInfo>('/api/metrics/storage');
+      setStorageInfo(data);
+    } catch (error) {
+      console.error('Failed to fetch storage info:', error);
+    }
+  };
+
+  const handlePruneMetrics = async () => {
+    if (!pruneDate) return;
+
+    setPruning(true);
+    setStorageMessage(null);
+
+    try {
+      const beforeDate = new Date(pruneDate).toISOString();
+      const result = await api.post<{ success: boolean; deleted_records: number }>('/api/metrics/prune', {
+        before: beforeDate,
+      });
+      setStorageMessage(`Pruned ${result.deleted_records} metrics records.`);
+      setIsPruneModalOpen(false);
+      setPruneDate('');
+      await fetchStorageInfo();
+    } catch (error: any) {
+      setStorageMessage(`Error: ${error.message || 'Failed to prune metrics'}`);
+    } finally {
+      setPruning(false);
+    }
+  };
+
+  const handleVacuumDatabase = async () => {
+    setVacuuming(true);
+    setStorageMessage(null);
+
+    try {
+      const result = await api.post<{ success: boolean; size_before: number; size_after: number; space_reclaimed: number }>('/api/metrics/vacuum');
+      const reclaimed = result.space_reclaimed;
+      const reclaimedStr = reclaimed > 0 ? formatBytes(reclaimed) : '0 B';
+      setStorageMessage(`Database optimized. Reclaimed ${reclaimedStr} of space.`);
+      await fetchStorageInfo();
+    } catch (error: any) {
+      setStorageMessage(`Error: ${error.message || 'Failed to vacuum database'}`);
+    } finally {
+      setVacuuming(false);
     }
   };
 
@@ -407,6 +473,90 @@ export default function Settings() {
                 You are running the latest version.
               </p>
             )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Storage Management */}
+      <Card className="p-6">
+        <div className="flex items-start space-x-4">
+          <div className="flex-shrink-0">
+            <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center">
+              <Database className="h-6 w-6 text-teal-600" />
+            </div>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-900">Storage Management</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Manage metrics database storage and cleanup old data.
+            </p>
+
+            {/* Storage Info */}
+            {storageInfo && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Database Size</p>
+                    <p className="text-lg font-semibold text-gray-900">{storageInfo.size_formatted}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total Records</p>
+                    <p className="text-lg font-semibold text-gray-900">{storageInfo.metrics_count.toLocaleString()}</p>
+                  </div>
+                  {storageInfo.oldest_timestamp && (
+                    <div>
+                      <p className="text-sm text-gray-600">Oldest Record</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {formatDate(storageInfo.oldest_timestamp)}
+                      </p>
+                    </div>
+                  )}
+                  {storageInfo.newest_timestamp && (
+                    <div>
+                      <p className="text-sm text-gray-600">Newest Record</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {formatDate(storageInfo.newest_timestamp)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Storage Messages */}
+            {storageMessage && (
+              <div className={`mt-4 p-4 rounded-md ${storageMessage.startsWith('Error') ? 'bg-red-50 border border-red-200 text-red-800' : 'bg-green-50 border border-green-200 text-green-800'}`}>
+                <p className="text-sm">{storageMessage}</p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const thirtyDaysAgo = new Date();
+                  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                  setPruneDate(thirtyDaysAgo.toISOString().split('T')[0]);
+                  setIsPruneModalOpen(true);
+                }}
+                disabled={pruning || vacuuming}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Prune Old Data
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleVacuumDatabase}
+                loading={vacuuming}
+                disabled={pruning}
+              >
+                <Database className="h-4 w-4 mr-2" />
+                Optimize Database
+              </Button>
+            </div>
           </div>
         </div>
       </Card>
@@ -866,6 +1016,66 @@ export default function Settings() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Prune Metrics Modal */}
+      <Modal
+        isOpen={isPruneModalOpen}
+        onClose={() => {
+          setIsPruneModalOpen(false);
+          setPruneDate('');
+        }}
+        title="Prune Old Metrics Data"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            This will permanently delete all metrics data older than the selected date.
+            This action cannot be undone.
+          </p>
+
+          <Input
+            label="Delete data older than"
+            type="date"
+            value={pruneDate}
+            onChange={(e) => setPruneDate(e.target.value)}
+            max={new Date().toISOString().split('T')[0]}
+          />
+
+          {pruneDate && (
+            <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-md">
+              <div className="flex items-start">
+                <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 mr-2 flex-shrink-0" />
+                <p className="text-sm text-yellow-800">
+                  All metrics recorded before {new Date(pruneDate).toLocaleDateString()} will be permanently deleted.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setIsPruneModalOpen(false);
+                setPruneDate('');
+              }}
+              disabled={pruning}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={handlePruneMetrics}
+              loading={pruning}
+              disabled={!pruneDate}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Old Data
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

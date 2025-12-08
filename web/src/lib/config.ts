@@ -75,4 +75,15 @@ export const API_ENDPOINTS = {
   // Version
   version: '/api/version',
   versionCheck: '/api/version/check',
+
+  // Metrics
+  metricsSystem: '/api/metrics/system',
+  metricsDocker: '/api/metrics/docker',
+  metricsDockerContainer: (id: string) => `/api/metrics/docker/${id}`,
+  metricsDockerContainerHistory: (id: string) => `/api/metrics/docker/${id}/history`,
+  metricsSummary: '/api/metrics/summary',
+  metricsHistory: '/api/metrics/history',
+  metricsStorage: '/api/metrics/storage',
+  metricsPrune: '/api/metrics/prune',
+  metricsVacuum: '/api/metrics/vacuum',
 } as const;
