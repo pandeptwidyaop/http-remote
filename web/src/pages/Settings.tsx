@@ -335,7 +335,14 @@ export default function Settings() {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString();
+    const date = new Date(dateStr);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
   };
 
   if (loading) {
@@ -1046,7 +1053,7 @@ export default function Settings() {
               <div className="flex items-start">
                 <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 mr-2 flex-shrink-0" />
                 <p className="text-sm text-yellow-800">
-                  All metrics recorded before {new Date(pruneDate).toLocaleDateString()} will be permanently deleted.
+                  All metrics recorded before {pruneDate} will be permanently deleted.
                 </p>
               </div>
             </div>
