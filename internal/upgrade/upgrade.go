@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pandeptwidyaop/http-remote/internal/service"
 	"github.com/pandeptwidyaop/http-remote/internal/version"
 )
 
@@ -198,18 +200,42 @@ func Download(url string, progressFn func(downloaded, total int64)) (string, err
 	return tmpFile.Name(), nil
 }
 
-// Install replaces the current binary with the new one
-func Install(tmpPath string) error {
-	// Get current executable path
+// GetTargetExecPath returns the path where the binary should be installed.
+// If running as a systemd service, it uses the path from the service file.
+// Otherwise, it uses the current executable path.
+func GetTargetExecPath() (string, error) {
+	// If running as systemd service, get path from service file
+	if service.IsRunningAsService() && service.IsSystemdAvailable() {
+		servicePath, err := service.GetServiceExecPath()
+		if err == nil && servicePath != "" {
+			log.Printf("[Upgrade] Using systemd service path: %s", servicePath)
+			return servicePath, nil
+		}
+		log.Printf("[Upgrade] Could not get systemd path (%v), falling back to os.Executable", err)
+	}
+
+	// Fallback to current executable path
 	execPath, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
+		return "", fmt.Errorf("failed to get executable path: %w", err)
 	}
 
 	// Resolve symlinks
 	execPath, err = filepath.EvalSymlinks(execPath)
 	if err != nil {
-		return fmt.Errorf("failed to resolve executable path: %w", err)
+		return "", fmt.Errorf("failed to resolve executable path: %w", err)
+	}
+
+	log.Printf("[Upgrade] Using executable path: %s", execPath)
+	return execPath, nil
+}
+
+// Install replaces the current binary with the new one
+func Install(tmpPath string) error {
+	// Get target executable path (considers systemd service path)
+	execPath, err := GetTargetExecPath()
+	if err != nil {
+		return err
 	}
 
 	// Create versioned backup with timestamp
@@ -302,13 +328,9 @@ func rotateBackups(_ string) error {
 
 // ListBackups returns all available backup versions
 func ListBackups() ([]BackupInfo, error) {
-	execPath, err := os.Executable()
+	execPath, err := GetTargetExecPath()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get executable path: %w", err)
-	}
-	execPath, err = filepath.EvalSymlinks(execPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve executable path: %w", err)
+		return nil, err
 	}
 
 	dir := filepath.Dir(execPath)
@@ -377,14 +399,10 @@ func ListBackups() ([]BackupInfo, error) {
 
 // Rollback restores a previous version from backup
 func Rollback(backupPath string) error {
-	// Get current executable path
-	execPath, err := os.Executable()
+	// Get target executable path (considers systemd service path)
+	execPath, err := GetTargetExecPath()
 	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
-	}
-	execPath, err = filepath.EvalSymlinks(execPath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve executable path: %w", err)
+		return err
 	}
 
 	// Verify backup exists

@@ -214,7 +214,39 @@ func Restart() error {
 		return fmt.Errorf("systemd not available on this system")
 	}
 
-	return runSystemctl("restart", serviceName)
+	// Try different restart methods
+	// 1. First try systemctl restart (requires root or polkit policy)
+	if err := runSystemctl("restart", serviceName); err == nil {
+		return nil
+	}
+
+	// 2. Try with sudo (if sudoers is configured)
+	if err := runWithSudo("systemctl", "restart", serviceName); err == nil {
+		return nil
+	}
+
+	// 3. Last resort: use kill to send SIGHUP for graceful restart
+	// This won't actually restart if not running as systemd service
+	return fmt.Errorf("failed to restart service: insufficient permissions. Please restart manually with: sudo systemctl restart %s", serviceName)
+}
+
+// runWithSudo executes a command with sudo (non-interactive)
+func runWithSudo(args ...string) error {
+	// Check if sudo is available
+	sudoPath, err := exec.LookPath("sudo")
+	if err != nil {
+		return fmt.Errorf("sudo not available: %w", err)
+	}
+
+	// Run with sudo -n (non-interactive, fails if password required)
+	cmdArgs := append([]string{"-n"}, args...)
+	// #nosec G204 - args are from internal code (systemctl restart servicename), not user input
+	cmd := exec.Command(sudoPath, cmdArgs...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s: %s", err, string(output))
+	}
+	return nil
 }
 
 // Stop stops the systemd service.
@@ -287,4 +319,43 @@ func getSystemctlProperty(property string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+// GetServiceExecPath returns the executable path from the systemd service file.
+// This is useful for upgrade to ensure we update the correct binary.
+func GetServiceExecPath() (string, error) {
+	if !IsLinux() || !IsSystemdAvailable() {
+		return "", fmt.Errorf("systemd not available")
+	}
+
+	// Get ExecStart from systemd (this includes all arguments)
+	execStart, err := getSystemctlProperty("ExecStart")
+	if err != nil {
+		return "", fmt.Errorf("failed to get ExecStart: %w", err)
+	}
+
+	if execStart == "" {
+		return "", fmt.Errorf("service not installed or ExecStart not set")
+	}
+
+	// ExecStart format: { path=/usr/local/bin/http-remote ; argv[]=/usr/local/bin/http-remote -config ... }
+	// or simpler: /usr/local/bin/http-remote -config ...
+	// We need to extract just the executable path
+
+	// Try to parse the systemd format first
+	if strings.HasPrefix(execStart, "{ path=") {
+		// Extract path from { path=/path/to/exec ; argv[]=... }
+		pathEnd := strings.Index(execStart, " ;")
+		if pathEnd > 7 {
+			return execStart[7:pathEnd], nil
+		}
+	}
+
+	// Simpler format: just take the first word (the executable)
+	parts := strings.Fields(execStart)
+	if len(parts) > 0 {
+		return parts[0], nil
+	}
+
+	return "", fmt.Errorf("could not parse ExecStart: %s", execStart)
 }

@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"runtime"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -209,8 +210,23 @@ func (h *SystemHandler) Restart(c *gin.Context) {
 	})
 
 	// Restart in a goroutine to allow response to be sent
+	// Add small delay to ensure response is sent before process dies
 	go func() {
-		_ = service.Restart()
+		// Wait for response to be sent
+		time.Sleep(500 * time.Millisecond)
+
+		if err := service.Restart(); err != nil {
+			// Log the error - we can't send it back since response is already sent
+			_ = h.auditService.Log(services.AuditLog{
+				UserID:       &u.ID,
+				Username:     u.Username,
+				Action:       "system_restart_failed",
+				ResourceType: "system",
+				Details:      map[string]interface{}{"error": err.Error()},
+				IPAddress:    c.ClientIP(),
+				UserAgent:    c.GetHeader("User-Agent"),
+			})
+		}
 	}()
 }
 
