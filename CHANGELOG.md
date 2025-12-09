@@ -1,3 +1,10 @@
+## [2.9.1](https://github.com/pandeptwidyaop/http-remote/compare/v2.9.0...v2.9.1) (2025-12-09)
+
+
+### Bug Fixes
+
+* make user section fixed at bottom of sidebar ([7f65ac6](https://github.com/pandeptwidyaop/http-remote/commit/7f65ac6a1f2e9544e963a6ba6aeb8108ce22232b))
+
 # [2.9.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.8.2...v2.9.0) (2025-12-09)
 
 
