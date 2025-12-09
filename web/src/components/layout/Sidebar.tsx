@@ -92,7 +92,7 @@ export default function Sidebar() {
       {/* Sidebar */}
       <aside
         className={`
-          fixed top-0 left-0 z-40 h-screen bg-gray-900 text-white transition-all duration-300 ease-in-out
+          fixed top-0 left-0 z-40 h-screen bg-gray-900 text-white transition-all duration-300 ease-in-out flex flex-col
           ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
           md:translate-x-0
           ${collapsed ? 'md:w-16' : 'md:w-64'}
@@ -100,7 +100,7 @@ export default function Sidebar() {
       >
         {/* Logo / Brand */}
         <div
-          className={`h-14 flex items-center border-b border-gray-800 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}
+          className={`h-14 flex-shrink-0 flex items-center border-b border-gray-800 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}
         >
           {!collapsed && (
             <div className="flex items-center gap-2">
@@ -123,7 +123,7 @@ export default function Sidebar() {
 
         {/* Update Banner */}
         {showUpdateBanner && !collapsed && (
-          <div className="mx-3 mt-3 p-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg">
+          <div className="flex-shrink-0 mx-3 mt-3 p-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg">
             <div className="flex items-start gap-2">
               <ArrowUpCircle className="h-5 w-5 flex-shrink-0 animate-bounce" />
               <div className="flex-1 min-w-0">
@@ -147,8 +147,8 @@ export default function Sidebar() {
           </div>
         )}
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {/* Navigation - scrollable area */}
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto min-h-0">
           {navLinks.map((link) => {
             const Icon = link.icon;
             const active = isActive(link.path);
@@ -176,8 +176,8 @@ export default function Sidebar() {
           })}
         </nav>
 
-        {/* User Section */}
-        <div className="border-t border-gray-800 p-3">
+        {/* User Section - fixed at bottom */}
+        <div className="flex-shrink-0 border-t border-gray-800 p-3 mt-auto">
           <div
             className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}
           >
