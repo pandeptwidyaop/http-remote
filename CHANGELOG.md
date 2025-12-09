@@ -1,3 +1,10 @@
+## [2.9.2](https://github.com/pandeptwidyaop/http-remote/compare/v2.9.1...v2.9.2) (2025-12-09)
+
+
+### Bug Fixes
+
+* change date format to YYYY-MM-DD HH:mm:ss in Settings ([990d4e0](https://github.com/pandeptwidyaop/http-remote/commit/990d4e07be84dd974227908efc530776b7cf145b))
+
 ## [2.9.1](https://github.com/pandeptwidyaop/http-remote/compare/v2.9.0...v2.9.1) (2025-12-09)
 
 
