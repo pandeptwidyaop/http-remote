@@ -51,3 +51,11 @@ security:
 #   blocked_paths:
 #     - "/home/devops/.ssh"
 #     - "/home/devops/.gnupg"
+
+# Metrics collection settings
+metrics:
+  enabled: true                  # Enable metrics collection (default: true)
+  collection_interval: "1m"      # How often to collect metrics (default: 1m)
+  retention_days: 7              # How long to keep raw metrics in days (default: 7)
+  hourly_retention_days: 30      # How long to keep hourly aggregates in days (default: 30)
+  daily_retention_days: 365      # How long to keep daily aggregates in days (default: 365)

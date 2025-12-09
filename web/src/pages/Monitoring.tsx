@@ -11,6 +11,9 @@ import {
   AlertTriangle,
   Clock,
   TrendingUp,
+  ChevronDown,
+  ChevronUp,
+  BarChart3,
 } from 'lucide-react';
 import {
   LineChart,
@@ -141,6 +144,30 @@ interface HistoricalResponse {
   to: string;
   resolution: string;
   data: HistoricalMetric[];
+}
+
+interface ContainerHistoricalMetric {
+  id: number;
+  timestamp: string;
+  container_id: string;
+  container_name: string;
+  image: string;
+  state: string;
+  cpu_percent: number;
+  memory_percent: number;
+  memory_used: number;
+  memory_limit: number;
+  network_rx: number;
+  network_tx: number;
+  block_read: number;
+  block_write: number;
+}
+
+interface ContainerHistoricalResponse {
+  container_id: string;
+  from: string;
+  to: string;
+  data: ContainerHistoricalMetric[];
 }
 
 // Time range options
@@ -367,6 +394,122 @@ function MetricChart({
   );
 }
 
+// Container History Chart Component
+function ContainerHistoryChart({
+  containerId,
+  containerName,
+  timeRange,
+}: {
+  containerId: string;
+  containerName: string;
+  timeRange: string;
+}) {
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [localTimeRange, setLocalTimeRange] = useState(timeRange);
+
+  const fetchHistory = useCallback(async () => {
+    setLoading(true);
+    try {
+      const range = TIME_RANGES.find((r) => r.value === localTimeRange);
+      const hours = range?.hours || 1;
+      const from = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+      const to = new Date().toISOString();
+
+      const response = await api.get<ContainerHistoricalResponse>(
+        `${API_ENDPOINTS.metricsDockerContainerHistory(containerId)}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+      );
+
+      const chartData = (response.data || []).map((item) => ({
+        time: formatChartTime(item.timestamp, localTimeRange),
+        timestamp: item.timestamp,
+        cpu: item.cpu_percent,
+        memory: item.memory_percent,
+      }));
+
+      setData(chartData);
+    } catch (err) {
+      console.error(`Failed to fetch history for container ${containerId}:`, err);
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [containerId, localTimeRange]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  return (
+    <div className="mt-4 pt-4 border-t border-gray-200">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <BarChart3 className="h-4 w-4" />
+          <span>Historical Performance - {containerName}</span>
+        </div>
+        <TimeRangeSelector selected={localTimeRange} onChange={setLocalTimeRange} />
+      </div>
+      <div className="h-48">
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          </div>
+        ) : data.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-gray-500">
+            <div className="text-center">
+              <Clock className="h-6 w-6 mx-auto mb-1 text-gray-400" />
+              <p className="text-sm">No historical data</p>
+            </div>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis
+                dataKey="time"
+                tick={{ fontSize: 10, fill: '#6b7280' }}
+                tickLine={false}
+                axisLine={{ stroke: '#e5e7eb' }}
+              />
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fontSize: 10, fill: '#6b7280' }}
+                tickLine={false}
+                axisLine={{ stroke: '#e5e7eb' }}
+                tickFormatter={(value) => `${value}%`}
+                width={40}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend
+                verticalAlign="top"
+                height={24}
+                iconType="line"
+                wrapperStyle={{ fontSize: '11px' }}
+              />
+              <Line
+                type="monotone"
+                dataKey="cpu"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                dot={false}
+                name="CPU"
+              />
+              <Line
+                type="monotone"
+                dataKey="memory"
+                stroke="#8b5cf6"
+                strokeWidth={2}
+                dot={false}
+                name="Memory"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Combined CPU & Memory Chart
 function CombinedChart({
   data,
@@ -462,6 +605,19 @@ export default function Monitoring() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [timeRange, setTimeRange] = useState('1h');
+  const [expandedContainers, setExpandedContainers] = useState<Set<string>>(new Set());
+
+  const toggleContainerExpand = (containerId: string) => {
+    setExpandedContainers((prev) => {
+      const next = new Set(prev);
+      if (next.has(containerId)) {
+        next.delete(containerId);
+      } else {
+        next.add(containerId);
+      }
+      return next;
+    });
+  };
 
   const fetchMetrics = useCallback(async () => {
     try {
@@ -474,6 +630,20 @@ export default function Monitoring() {
       setDockerMetrics(docker);
       setLastUpdate(new Date());
       setError(null);
+
+      // Auto-expand running containers on first load
+      if (docker?.containers) {
+        setExpandedContainers((prev) => {
+          if (prev.size === 0) {
+            // First load - expand all running containers
+            const runningIds = docker.containers
+              .filter((c) => c.state === 'running')
+              .map((c) => c.id);
+            return new Set(runningIds);
+          }
+          return prev;
+        });
+      }
     } catch (err) {
       console.error('Failed to fetch metrics:', err);
       setError('Failed to fetch metrics');
@@ -839,95 +1009,143 @@ export default function Monitoring() {
             <h3 className="text-lg font-medium text-gray-900">Docker Containers</h3>
           </div>
           <div className="space-y-4">
-            {dockerMetrics.containers.map((container) => (
-              <div
-                key={container.id}
-                className={`border rounded-lg p-4 ${
-                  container.state === 'running' ? 'border-green-200 bg-green-50' : 'border-gray-200'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <span className="font-medium text-gray-900">{container.name}</span>
-                    <span className="text-xs text-gray-500 ml-2">({container.id})</span>
+            {/* Sort containers: running first, then paused, then exited/stopped */}
+            {[...dockerMetrics.containers]
+              .sort((a, b) => {
+                const order = { running: 0, paused: 1, exited: 2, stopped: 2 };
+                const aOrder = order[a.state as keyof typeof order] ?? 3;
+                const bOrder = order[b.state as keyof typeof order] ?? 3;
+                return aOrder - bOrder;
+              })
+              .map((container) => {
+              const isExpanded = expandedContainers.has(container.id);
+              return (
+                <div
+                  key={container.id}
+                  className={`border rounded-lg p-4 ${
+                    container.state === 'running' ? 'border-green-200 bg-green-50' : 'border-gray-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      {container.state === 'running' && (
+                        <button
+                          onClick={() => toggleContainerExpand(container.id)}
+                          className="p-1 hover:bg-gray-200 rounded transition-colors"
+                          title={isExpanded ? 'Hide history' : 'Show history'}
+                        >
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4 text-gray-500" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-gray-500" />
+                          )}
+                        </button>
+                      )}
+                      <div>
+                        <span className="font-medium text-gray-900">{container.name}</span>
+                        <span className="text-xs text-gray-500 ml-2">({container.id})</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {container.state === 'running' && (
+                        <button
+                          onClick={() => toggleContainerExpand(container.id)}
+                          className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        >
+                          <BarChart3 className="h-3 w-3" />
+                          History
+                        </button>
+                      )}
+                      <span
+                        className={`px-2 py-1 rounded text-xs ${
+                          container.state === 'running'
+                            ? 'bg-green-100 text-green-700'
+                            : container.state === 'paused'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        {container.state}
+                      </span>
+                    </div>
                   </div>
-                  <span
-                    className={`px-2 py-1 rounded text-xs ${
-                      container.state === 'running'
-                        ? 'bg-green-100 text-green-700'
-                        : container.state === 'paused'
-                        ? 'bg-yellow-100 text-yellow-700'
-                        : 'bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    {container.state}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 mb-3">{container.image}</p>
+                  <p className="text-xs text-gray-500 mb-3">{container.image}</p>
 
-                {container.state === 'running' && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
-                        <Cpu className="h-3 w-3" /> CPU
+                  {container.state === 'running' && (
+                    <>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
+                            <Cpu className="h-3 w-3" /> CPU
+                          </div>
+                          <div className="text-sm font-medium">
+                            {container.cpu.usage_percent.toFixed(1)}%
+                          </div>
+                          <ProgressBar
+                            value={container.cpu.usage_percent}
+                            color="auto"
+                            showLabel={false}
+                          />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
+                            <MemoryStick className="h-3 w-3" /> Memory
+                          </div>
+                          <div className="text-sm font-medium">
+                            {container.memory.used_percent.toFixed(1)}%
+                          </div>
+                          <ProgressBar
+                            value={container.memory.used_percent}
+                            color="auto"
+                            showLabel={false}
+                          />
+                          <p className="text-xs text-gray-400 mt-1">
+                            {formatBytes(container.memory.usage)} / {formatBytes(container.memory.limit)}
+                          </p>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
+                            <Network className="h-3 w-3" /> Network
+                          </div>
+                          <div className="text-xs">
+                            <span className="text-green-600">
+                              ↓ {formatBytes(container.network.rx_bytes)}
+                            </span>
+                            <span className="mx-1">/</span>
+                            <span className="text-blue-600">
+                              ↑ {formatBytes(container.network.tx_bytes)}
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
+                            <Activity className="h-3 w-3" /> Block I/O
+                          </div>
+                          <div className="text-xs">
+                            <span className="text-green-600">
+                              R {formatBytes(container.block_io.read_bytes)}
+                            </span>
+                            <span className="mx-1">/</span>
+                            <span className="text-blue-600">
+                              W {formatBytes(container.block_io.write_bytes)}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-sm font-medium">
-                        {container.cpu.usage_percent.toFixed(1)}%
-                      </div>
-                      <ProgressBar
-                        value={container.cpu.usage_percent}
-                        color="auto"
-                        showLabel={false}
-                      />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
-                        <MemoryStick className="h-3 w-3" /> Memory
-                      </div>
-                      <div className="text-sm font-medium">
-                        {container.memory.used_percent.toFixed(1)}%
-                      </div>
-                      <ProgressBar
-                        value={container.memory.used_percent}
-                        color="auto"
-                        showLabel={false}
-                      />
-                      <p className="text-xs text-gray-400 mt-1">
-                        {formatBytes(container.memory.usage)} / {formatBytes(container.memory.limit)}
-                      </p>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
-                        <Network className="h-3 w-3" /> Network
-                      </div>
-                      <div className="text-xs">
-                        <span className="text-green-600">
-                          ↓ {formatBytes(container.network.rx_bytes)}
-                        </span>
-                        <span className="mx-1">/</span>
-                        <span className="text-blue-600">
-                          ↑ {formatBytes(container.network.tx_bytes)}
-                        </span>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
-                        <Activity className="h-3 w-3" /> Block I/O
-                      </div>
-                      <div className="text-xs">
-                        <span className="text-green-600">
-                          R {formatBytes(container.block_io.read_bytes)}
-                        </span>
-                        <span className="mx-1">/</span>
-                        <span className="text-blue-600">
-                          W {formatBytes(container.block_io.write_bytes)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
+
+                      {/* Container History Chart */}
+                      {isExpanded && (
+                        <ContainerHistoryChart
+                          containerId={container.id}
+                          containerName={container.name}
+                          timeRange={timeRange}
+                        />
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </Card>
       )}

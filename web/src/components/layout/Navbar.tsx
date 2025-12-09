@@ -27,16 +27,17 @@ export default function Navbar() {
 
   const isAdmin = user?.role === 'admin' || user?.is_admin;
 
+  // Primary links show label, secondary links are icon-only on desktop
   const navLinks = [
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/apps', label: 'Apps', icon: Package },
-    { path: '/executions', label: 'History', icon: History },
-    { path: '/monitoring', label: 'Monitoring', icon: Activity },
-    { path: '/terminal', label: 'Terminal', icon: Terminal },
-    { path: '/files', label: 'Files', icon: FolderOpen },
-    { path: '/audit-logs', label: 'Audit Logs', icon: FileText },
-    ...(isAdmin ? [{ path: '/users', label: 'Users', icon: Users }] : []),
-    { path: '/settings', label: 'Settings', icon: Settings },
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, primary: true },
+    { path: '/apps', label: 'Apps', icon: Package, primary: true },
+    { path: '/executions', label: 'History', icon: History, primary: false },
+    { path: '/monitoring', label: 'Monitoring', icon: Activity, primary: true },
+    { path: '/terminal', label: 'Terminal', icon: Terminal, primary: false },
+    { path: '/files', label: 'Files', icon: FolderOpen, primary: false },
+    { path: '/audit-logs', label: 'Audit Logs', icon: FileText, primary: false },
+    ...(isAdmin ? [{ path: '/users', label: 'Users', icon: Users, primary: false }] : []),
+    { path: '/settings', label: 'Settings', icon: Settings, primary: false },
   ];
 
   const isActive = (path: string) => {
@@ -121,14 +122,21 @@ export default function Navbar() {
                 <Link
                   key={link.path}
                   to={link.path}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  title={link.label}
+                  className={`group relative flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     active
                       ? 'bg-gray-800 text-white'
                       : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
-                  <span>{link.label}</span>
+                  {link.primary ? (
+                    <span className="ml-2">{link.label}</span>
+                  ) : (
+                    <span className="absolute left-1/2 -translate-x-1/2 top-full mt-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
+                      {link.label}
+                    </span>
+                  )}
                 </Link>
               );
             })}
