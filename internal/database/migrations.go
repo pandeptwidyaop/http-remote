@@ -280,6 +280,22 @@ func runVersionedMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Migration: Add swap columns to system_metrics tables
+	migrationName = "2025_12_09_000002_add_swap_to_metrics"
+	hasRun, err = hasMigrationRun(db, migrationName)
+	if err != nil {
+		return err
+	}
+
+	if !hasRun {
+		if err := addSwapToMetricsTables(db); err != nil {
+			return err
+		}
+		if err := recordMigration(db, migrationName, batch); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -764,4 +780,47 @@ func add2FAToUsers(db *sql.DB) error {
 	}
 
 	return tx.Commit()
+}
+
+// addSwapToMetricsTables adds swap columns to system_metrics tables
+func addSwapToMetricsTables(db *sql.DB) error {
+	// Add swap columns to system_metrics table
+	_, err := db.Exec(`ALTER TABLE system_metrics ADD COLUMN swap_percent REAL DEFAULT 0`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`ALTER TABLE system_metrics ADD COLUMN swap_used INTEGER DEFAULT 0`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`ALTER TABLE system_metrics ADD COLUMN swap_total INTEGER DEFAULT 0`)
+	if err != nil {
+		return err
+	}
+
+	// Add swap columns to system_metrics_hourly table
+	_, err = db.Exec(`ALTER TABLE system_metrics_hourly ADD COLUMN swap_avg REAL DEFAULT 0`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`ALTER TABLE system_metrics_hourly ADD COLUMN swap_max REAL DEFAULT 0`)
+	if err != nil {
+		return err
+	}
+
+	// Add swap columns to system_metrics_daily table
+	_, err = db.Exec(`ALTER TABLE system_metrics_daily ADD COLUMN swap_avg REAL DEFAULT 0`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`ALTER TABLE system_metrics_daily ADD COLUMN swap_max REAL DEFAULT 0`)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

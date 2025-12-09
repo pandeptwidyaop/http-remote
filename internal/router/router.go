@@ -93,6 +93,10 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 	}
 	metricsHandler := handlers.NewMetricsHandler(collector, cfg.Database.Path)
 
+	// Initialize container handler
+	containerService := services.NewContainerService(auditService)
+	containerHandler := handlers.NewContainerHandler(containerService)
+
 	// Rate limiters
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)   // 5 req/min for login
 	apiLimiter := middleware.NewRateLimiter(60, time.Minute)    // 60 req/min for API
@@ -202,6 +206,18 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 			protected.GET("/metrics/stream", metricsHandler.StreamMetrics) // SSE endpoint for real-time metrics
 			protected.POST("/metrics/prune", metricsHandler.PruneMetrics)
 			protected.POST("/metrics/vacuum", metricsHandler.VacuumDatabase)
+
+			// Container management endpoints
+			protected.GET("/containers/status", containerHandler.CheckDocker)
+			protected.GET("/containers", containerHandler.List)
+			protected.GET("/containers/:id", containerHandler.Get)
+			protected.POST("/containers/:id/start", containerHandler.Start)
+			protected.POST("/containers/:id/stop", containerHandler.Stop)
+			protected.POST("/containers/:id/restart", containerHandler.Restart)
+			protected.DELETE("/containers/:id", containerHandler.Remove)
+			protected.GET("/containers/:id/logs", containerHandler.StreamLogs)
+			protected.POST("/containers/:id/exec", containerHandler.ExecCommand)
+			protected.GET("/containers/:id/terminal", containerHandler.ExecInteractive)
 		}
 	}
 

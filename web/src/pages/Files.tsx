@@ -21,6 +21,8 @@ import {
   X,
   Save,
   FolderPlus,
+  FileCode,
+  AlignLeft,
 } from 'lucide-react';
 import Editor, { loader } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
@@ -227,6 +229,7 @@ export default function Files() {
   const [editContent, setEditContent] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [viewMode, setViewMode] = useState<'editor' | 'raw'>('editor');
 
   // Fetch default path on mount
   useEffect(() => {
@@ -829,6 +832,7 @@ export default function Files() {
         onClose={() => {
           setIsViewModalOpen(false);
           setFileContent(null);
+          setViewMode('editor');
         }}
         title={fileContent?.name || 'View File'}
         size="xl"
@@ -836,7 +840,37 @@ export default function Files() {
         {fileContent && (
           <div className="space-y-4">
             <div className="flex items-center justify-between text-sm text-gray-500">
-              <span>Size: {formatSize(fileContent.size)}</span>
+              <div className="flex items-center gap-3">
+                <span>Size: {formatSize(fileContent.size)}</span>
+                {!fileContent.is_binary && (
+                  <div className="flex items-center border rounded-md overflow-hidden">
+                    <button
+                      onClick={() => setViewMode('editor')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 text-xs transition-colors ${
+                        viewMode === 'editor'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                      title="Editor View"
+                    >
+                      <FileCode className="h-3.5 w-3.5" />
+                      Editor
+                    </button>
+                    <button
+                      onClick={() => setViewMode('raw')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 text-xs transition-colors ${
+                        viewMode === 'raw'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                      title="Raw View"
+                    >
+                      <AlignLeft className="h-3.5 w-3.5" />
+                      Raw
+                    </button>
+                  </div>
+                )}
+              </div>
               {!fileContent.is_binary && (
                 <Button variant="secondary" size="sm" onClick={editFile}>
                   <Edit3 className="h-4 w-4 mr-2" />
@@ -858,7 +892,7 @@ export default function Files() {
                   Download
                 </Button>
               </div>
-            ) : (
+            ) : viewMode === 'editor' ? (
               <div className="border border-gray-200 rounded-lg overflow-hidden">
                 <Editor
                   height="500px"
@@ -876,6 +910,12 @@ export default function Files() {
                     automaticLayout: true,
                   }}
                 />
+              </div>
+            ) : (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <pre className="bg-gray-900 text-gray-100 p-4 overflow-auto h-[500px] text-sm font-mono whitespace-pre-wrap break-all">
+                  {fileContent.content}
+                </pre>
               </div>
             )}
           </div>

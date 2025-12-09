@@ -87,4 +87,15 @@ export const API_ENDPOINTS = {
   metricsStream: '/api/metrics/stream',
   metricsPrune: '/api/metrics/prune',
   metricsVacuum: '/api/metrics/vacuum',
+
+  // Containers
+  containersStatus: '/api/containers/status',
+  containers: '/api/containers',
+  container: (id: string) => `/api/containers/${id}`,
+  containerStart: (id: string) => `/api/containers/${id}/start`,
+  containerStop: (id: string) => `/api/containers/${id}/stop`,
+  containerRestart: (id: string) => `/api/containers/${id}/restart`,
+  containerLogs: (id: string) => `/api/containers/${id}/logs`,
+  containerExec: (id: string) => `/api/containers/${id}/exec`,
+  containerTerminal: (id: string) => `/api/containers/${id}/terminal`,
 } as const;

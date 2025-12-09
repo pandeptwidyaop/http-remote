@@ -18,11 +18,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/devops/api': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost:8081',
         changeOrigin: true,
       },
       '/devops/deploy': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost:8081',
         changeOrigin: true,
       },
     },

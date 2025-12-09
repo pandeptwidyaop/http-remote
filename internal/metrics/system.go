@@ -40,6 +40,7 @@ type MemoryMetrics struct {
 	UsedPercent float64 `json:"used_percent"`
 	SwapTotal   uint64  `json:"swap_total"`
 	SwapUsed    uint64  `json:"swap_used"`
+	SwapPercent float64 `json:"swap_percent"`
 }
 
 // DiskMetrics represents disk usage information.
@@ -143,6 +144,7 @@ func GetSystemMetricsWithContext(ctx context.Context) (*SystemMetrics, error) {
 			mu.Lock()
 			metrics.Memory.SwapTotal = swap.Total
 			metrics.Memory.SwapUsed = swap.Used
+			metrics.Memory.SwapPercent = swap.UsedPercent
 			mu.Unlock()
 		}
 	}()

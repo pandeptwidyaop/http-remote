@@ -44,6 +44,9 @@ type StoredSystemMetrics struct {
 	NetworkData   string    `json:"network_data"`
 	LoadAvg       string    `json:"load_avg"`
 	Uptime        int64     `json:"uptime"`
+	SwapPercent   float64   `json:"swap_percent"`
+	SwapUsed      uint64    `json:"swap_used"`
+	SwapTotal     uint64    `json:"swap_total"`
 }
 
 // StoredDockerMetrics represents Docker container metrics stored in database.
@@ -196,8 +199,9 @@ func (c *MetricsCollector) storeSystemMetrics(m *metrics.SystemMetrics) error {
 	_, err = c.db.Exec(`
 		INSERT INTO system_metrics (
 			cpu_percent, memory_percent, memory_used, memory_total,
-			disk_data, network_data, load_avg, uptime
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			disk_data, network_data, load_avg, uptime,
+			swap_percent, swap_used, swap_total
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		m.CPU.UsagePercent,
 		m.Memory.UsedPercent,
@@ -207,6 +211,9 @@ func (c *MetricsCollector) storeSystemMetrics(m *metrics.SystemMetrics) error {
 		string(networkData),
 		string(loadAvgData),
 		m.Uptime,
+		m.Memory.SwapPercent,
+		m.Memory.SwapUsed,
+		m.Memory.SwapTotal,
 	)
 	return err
 }
@@ -361,14 +368,15 @@ func (c *MetricsCollector) aggregateHourly() {
 		SELECT
 			AVG(cpu_percent), MAX(cpu_percent),
 			AVG(memory_percent), MAX(memory_percent),
+			AVG(swap_percent), MAX(swap_percent),
 			COUNT(*)
 		FROM system_metrics
 		WHERE timestamp >= ? AND timestamp < ?
 	`, hourStart, hourEnd)
 
-	var cpuAvg, cpuMax, memAvg, memMax sql.NullFloat64
+	var cpuAvg, cpuMax, memAvg, memMax, swapAvg, swapMax sql.NullFloat64
 	var sampleCount int
-	if err := row.Scan(&cpuAvg, &cpuMax, &memAvg, &memMax, &sampleCount); err != nil || sampleCount == 0 {
+	if err := row.Scan(&cpuAvg, &cpuMax, &memAvg, &memMax, &swapAvg, &swapMax, &sampleCount); err != nil || sampleCount == 0 {
 		return
 	}
 
@@ -409,13 +417,15 @@ func (c *MetricsCollector) aggregateHourly() {
 	_, err = c.db.Exec(`
 		INSERT INTO system_metrics_hourly (
 			timestamp, cpu_avg, cpu_max, memory_avg, memory_max,
-			disk_data, network_rx_total, network_tx_total, sample_count
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			disk_data, network_rx_total, network_tx_total, sample_count,
+			swap_avg, swap_max
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		hourStart,
 		cpuAvg.Float64, cpuMax.Float64,
 		memAvg.Float64, memMax.Float64,
 		diskData, networkRxTotal, networkTxTotal, sampleCount,
+		swapAvg.Float64, swapMax.Float64,
 	)
 	if err != nil {
 		log.Printf("[MetricsCollector] Error creating hourly aggregate: %v", err)
@@ -440,16 +450,17 @@ func (c *MetricsCollector) aggregateDaily() {
 		SELECT
 			AVG(cpu_avg), MAX(cpu_max),
 			AVG(memory_avg), MAX(memory_max),
+			AVG(swap_avg), MAX(swap_max),
 			SUM(network_rx_total), SUM(network_tx_total),
 			SUM(sample_count)
 		FROM system_metrics_hourly
 		WHERE timestamp >= ? AND timestamp < ?
 	`, dayStart, dayEnd)
 
-	var cpuAvg, cpuMax, memAvg, memMax sql.NullFloat64
+	var cpuAvg, cpuMax, memAvg, memMax, swapAvg, swapMax sql.NullFloat64
 	var networkRxTotal, networkTxTotal sql.NullInt64
 	var sampleCount int
-	if err := row.Scan(&cpuAvg, &cpuMax, &memAvg, &memMax, &networkRxTotal, &networkTxTotal, &sampleCount); err != nil || sampleCount == 0 {
+	if err := row.Scan(&cpuAvg, &cpuMax, &memAvg, &memMax, &swapAvg, &swapMax, &networkRxTotal, &networkTxTotal, &sampleCount); err != nil || sampleCount == 0 {
 		return
 	}
 
@@ -467,13 +478,15 @@ func (c *MetricsCollector) aggregateDaily() {
 	_, err = c.db.Exec(`
 		INSERT INTO system_metrics_daily (
 			timestamp, cpu_avg, cpu_max, memory_avg, memory_max,
-			disk_data, network_rx_total, network_tx_total, sample_count
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			disk_data, network_rx_total, network_tx_total, sample_count,
+			swap_avg, swap_max
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		dayStart,
 		cpuAvg.Float64, cpuMax.Float64,
 		memAvg.Float64, memMax.Float64,
 		diskData, networkRxTotal.Int64, networkTxTotal.Int64, sampleCount,
+		swapAvg.Float64, swapMax.Float64,
 	)
 	if err != nil {
 		log.Printf("[MetricsCollector] Error creating daily aggregate: %v", err)
@@ -487,7 +500,8 @@ func (c *MetricsCollector) GetHistoricalMetrics(from, to time.Time, resolution s
 	case "raw":
 		query = `
 			SELECT id, timestamp, cpu_percent, memory_percent, memory_used, memory_total,
-				   disk_data, network_data, load_avg, uptime
+				   disk_data, network_data, load_avg, uptime,
+				   swap_percent, swap_used, swap_total
 			FROM system_metrics
 			WHERE timestamp >= ? AND timestamp <= ?
 			ORDER BY timestamp ASC
@@ -496,7 +510,8 @@ func (c *MetricsCollector) GetHistoricalMetrics(from, to time.Time, resolution s
 		query = `
 			SELECT id, timestamp, cpu_avg as cpu_percent, memory_avg as memory_percent,
 				   0 as memory_used, 0 as memory_total, disk_data, '[]' as network_data,
-				   '[]' as load_avg, 0 as uptime
+				   '[]' as load_avg, 0 as uptime,
+				   swap_avg as swap_percent, 0 as swap_used, 0 as swap_total
 			FROM system_metrics_hourly
 			WHERE timestamp >= ? AND timestamp <= ?
 			ORDER BY timestamp ASC
@@ -505,7 +520,8 @@ func (c *MetricsCollector) GetHistoricalMetrics(from, to time.Time, resolution s
 		query = `
 			SELECT id, timestamp, cpu_avg as cpu_percent, memory_avg as memory_percent,
 				   0 as memory_used, 0 as memory_total, disk_data, '[]' as network_data,
-				   '[]' as load_avg, 0 as uptime
+				   '[]' as load_avg, 0 as uptime,
+				   swap_avg as swap_percent, 0 as swap_used, 0 as swap_total
 			FROM system_metrics_daily
 			WHERE timestamp >= ? AND timestamp <= ?
 			ORDER BY timestamp ASC
@@ -513,7 +529,8 @@ func (c *MetricsCollector) GetHistoricalMetrics(from, to time.Time, resolution s
 	default:
 		query = `
 			SELECT id, timestamp, cpu_percent, memory_percent, memory_used, memory_total,
-				   disk_data, network_data, load_avg, uptime
+				   disk_data, network_data, load_avg, uptime,
+				   swap_percent, swap_used, swap_total
 			FROM system_metrics
 			WHERE timestamp >= ? AND timestamp <= ?
 			ORDER BY timestamp ASC
@@ -533,6 +550,7 @@ func (c *MetricsCollector) GetHistoricalMetrics(from, to time.Time, resolution s
 			&m.ID, &m.Timestamp, &m.CPUPercent, &m.MemoryPercent,
 			&m.MemoryUsed, &m.MemoryTotal, &m.DiskData, &m.NetworkData,
 			&m.LoadAvg, &m.Uptime,
+			&m.SwapPercent, &m.SwapUsed, &m.SwapTotal,
 		); err != nil {
 			continue
 		}

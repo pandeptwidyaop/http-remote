@@ -45,6 +45,9 @@ interface HistoricalMetric {
   network_data: string;
   load_avg: string;
   uptime: number;
+  swap_percent: number;
+  swap_used: number;
+  swap_total: number;
 }
 
 interface HistoricalResponse {
@@ -495,6 +498,14 @@ function CombinedChart({
                 dot={false}
                 name="Memory"
               />
+              <Line
+                type="monotone"
+                dataKey="swap"
+                stroke="#f97316"
+                strokeWidth={2}
+                dot={false}
+                name="Swap"
+              />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -567,6 +578,7 @@ export default function Monitoring() {
         timestamp: item.timestamp,
         cpu: item.cpu_percent,
         memory: item.memory_percent,
+        swap: item.swap_percent || 0,
       }));
 
       setHistoricalData(chartData);
@@ -715,6 +727,25 @@ export default function Monitoring() {
             {formatBytes(systemMetrics?.memory.used || 0)} /{' '}
             {formatBytes(systemMetrics?.memory.total || 0)}
           </p>
+          {/* Swap */}
+          {(systemMetrics?.memory.swap_total || 0) > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-gray-500">Swap</span>
+                <span className="text-xs font-medium text-gray-700">
+                  {((systemMetrics?.memory.swap_used || 0) / (systemMetrics?.memory.swap_total || 1) * 100).toFixed(1)}%
+                </span>
+              </div>
+              <ProgressBar
+                value={(systemMetrics?.memory.swap_used || 0) / (systemMetrics?.memory.swap_total || 1) * 100}
+                color="auto"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {formatBytes(systemMetrics?.memory.swap_used || 0)} /{' '}
+                {formatBytes(systemMetrics?.memory.swap_total || 0)}
+              </p>
+            </div>
+          )}
         </Card>
 
         {/* Uptime */}
@@ -814,6 +845,22 @@ export default function Monitoring() {
           loading={historyLoading}
           yAxisLabel="Memory"
           gradientId="memoryGradient"
+        />
+
+        {/* Swap Chart */}
+        <MetricChart
+          title="Swap Usage"
+          icon={MemoryStick}
+          iconBgColor="bg-orange-100"
+          iconColor="text-orange-600"
+          data={historicalData}
+          dataKey="swap"
+          color="#f97316"
+          timeRange={timeRange}
+          onTimeRangeChange={setTimeRange}
+          loading={historyLoading}
+          yAxisLabel="Swap"
+          gradientId="swapGradient"
         />
       </div>
 

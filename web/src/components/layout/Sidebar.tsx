@@ -16,6 +16,7 @@ import {
   Activity,
   ChevronLeft,
   ChevronRight,
+  Box,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useVersionStore } from '@/store/versionStore';
@@ -49,6 +50,7 @@ export default function Sidebar() {
     { path: '/apps', label: 'Apps', icon: Package },
     { path: '/executions', label: 'History', icon: History },
     { path: '/monitoring', label: 'Monitoring', icon: Activity },
+    { path: '/containers', label: 'Containers', icon: Box },
     { path: '/terminal', label: 'Terminal', icon: Terminal },
     { path: '/files', label: 'Files', icon: FolderOpen },
     { path: '/audit-logs', label: 'Audit Logs', icon: FileText },
