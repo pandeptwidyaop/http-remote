@@ -2,7 +2,9 @@
 package metrics
 
 import (
+	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -65,48 +67,103 @@ type NetworkMetrics struct {
 	IsUp        bool   `json:"is_up"`
 }
 
-// GetSystemMetrics collects current system metrics.
+// GetSystemMetrics collects current system metrics using parallel goroutines for speed.
 func GetSystemMetrics() (*SystemMetrics, error) {
+	return GetSystemMetricsWithContext(context.Background())
+}
+
+// GetSystemMetricsWithContext collects system metrics with context cancellation support.
+func GetSystemMetricsWithContext(ctx context.Context) (*SystemMetrics, error) {
+	// Check if already canceled
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
 	metrics := &SystemMetrics{}
+	var wg sync.WaitGroup
+	var mu sync.Mutex
 
-	// CPU - use a shorter interval for faster response
-	cpuPercent, err := cpu.Percent(500*time.Millisecond, false)
-	if err == nil && len(cpuPercent) > 0 {
-		metrics.CPU.UsagePercent = cpuPercent[0]
-	}
-
-	cpuPerCore, err := cpu.Percent(500*time.Millisecond, true)
-	if err == nil {
-		metrics.CPU.PerCore = cpuPerCore
-	}
-
-	cpuCount, err := cpu.Counts(true)
-	if err == nil {
-		metrics.CPU.Cores = cpuCount
-	}
-
-	// Memory
-	vmem, err := mem.VirtualMemory()
-	if err == nil {
-		metrics.Memory = MemoryMetrics{
-			Total:       vmem.Total,
-			Used:        vmem.Used,
-			Available:   vmem.Available,
-			UsedPercent: vmem.UsedPercent,
+	// CPU metrics (slowest - runs in parallel)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Check context before slow operation
+		if ctx.Err() != nil {
+			return
 		}
-	}
+		// Single call with 200ms interval (reduced from 500ms)
+		cpuPercent, err := cpu.Percent(200*time.Millisecond, true)
+		if err == nil && len(cpuPercent) > 0 {
+			mu.Lock()
+			metrics.CPU.PerCore = cpuPercent
+			// Calculate average
+			var total float64
+			for _, p := range cpuPercent {
+				total += p
+			}
+			metrics.CPU.UsagePercent = total / float64(len(cpuPercent))
+			mu.Unlock()
+		}
 
-	swap, err := mem.SwapMemory()
-	if err == nil {
-		metrics.Memory.SwapTotal = swap.Total
-		metrics.Memory.SwapUsed = swap.Used
-	}
+		if ctx.Err() != nil {
+			return
+		}
+		cpuCount, err := cpu.Counts(true)
+		if err == nil {
+			mu.Lock()
+			metrics.CPU.Cores = cpuCount
+			mu.Unlock()
+		}
+	}()
 
-	// Disks - all partitions
-	partitions, err := disk.Partitions(false)
-	if err == nil {
+	// Memory metrics
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if ctx.Err() != nil {
+			return
+		}
+		vmem, err := mem.VirtualMemory()
+		if err == nil {
+			mu.Lock()
+			metrics.Memory = MemoryMetrics{
+				Total:       vmem.Total,
+				Used:        vmem.Used,
+				Available:   vmem.Available,
+				UsedPercent: vmem.UsedPercent,
+			}
+			mu.Unlock()
+		}
+
+		if ctx.Err() != nil {
+			return
+		}
+		swap, err := mem.SwapMemory()
+		if err == nil {
+			mu.Lock()
+			metrics.Memory.SwapTotal = swap.Total
+			metrics.Memory.SwapUsed = swap.Used
+			mu.Unlock()
+		}
+	}()
+
+	// Disk metrics
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if ctx.Err() != nil {
+			return
+		}
+		partitions, err := disk.Partitions(false)
+		if err != nil {
+			return
+		}
+
+		var disks []DiskMetrics
 		for _, p := range partitions {
-			// Skip special filesystems
+			if ctx.Err() != nil {
+				return
+			}
 			if isVirtualFilesystem(p.Fstype) {
 				continue
 			}
@@ -116,7 +173,7 @@ func GetSystemMetrics() (*SystemMetrics, error) {
 				continue
 			}
 
-			metrics.Disks = append(metrics.Disks, DiskMetrics{
+			disks = append(disks, DiskMetrics{
 				Device:      p.Device,
 				MountPoint:  p.Mountpoint,
 				Filesystem:  p.Fstype,
@@ -126,14 +183,25 @@ func GetSystemMetrics() (*SystemMetrics, error) {
 				UsedPercent: usage.UsedPercent,
 			})
 		}
-	}
 
-	// Network interfaces
-	netIO, err := net.IOCounters(true)
-	if err == nil {
+		mu.Lock()
+		metrics.Disks = disks
+		mu.Unlock()
+	}()
+
+	// Network metrics
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if ctx.Err() != nil {
+			return
+		}
+		netIO, err := net.IOCounters(true)
+		if err != nil {
+			return
+		}
+
 		netInterfaces, _ := net.Interfaces()
-
-		// Create a map of interface flags
 		ifaceFlags := make(map[string]bool)
 		for _, iface := range netInterfaces {
 			isUp := false
@@ -146,13 +214,13 @@ func GetSystemMetrics() (*SystemMetrics, error) {
 			ifaceFlags[iface.Name] = isUp
 		}
 
+		var networks []NetworkMetrics
 		for _, io := range netIO {
-			// Skip loopback and virtual interfaces
 			if isVirtualInterface(io.Name) {
 				continue
 			}
 
-			metrics.Network = append(metrics.Network, NetworkMetrics{
+			networks = append(networks, NetworkMetrics{
 				Interface:   io.Name,
 				BytesSent:   io.BytesSent,
 				BytesRecv:   io.BytesRecv,
@@ -165,18 +233,39 @@ func GetSystemMetrics() (*SystemMetrics, error) {
 				IsUp:        ifaceFlags[io.Name],
 			})
 		}
-	}
 
-	// Uptime & Load
-	hostInfo, err := host.Info()
-	if err == nil {
-		metrics.Uptime = int64(hostInfo.Uptime)
-	}
+		mu.Lock()
+		metrics.Network = networks
+		mu.Unlock()
+	}()
 
-	loadAvg, err := load.Avg()
-	if err == nil {
-		metrics.LoadAvg = []float64{loadAvg.Load1, loadAvg.Load5, loadAvg.Load15}
-	}
+	// Host info (uptime & load)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if ctx.Err() != nil {
+			return
+		}
+		hostInfo, err := host.Info()
+		if err == nil {
+			mu.Lock()
+			metrics.Uptime = int64(hostInfo.Uptime)
+			mu.Unlock()
+		}
+
+		if ctx.Err() != nil {
+			return
+		}
+		loadAvg, err := load.Avg()
+		if err == nil {
+			mu.Lock()
+			metrics.LoadAvg = []float64{loadAvg.Load1, loadAvg.Load5, loadAvg.Load15}
+			mu.Unlock()
+		}
+	}()
+
+	// Wait for all goroutines to complete
+	wg.Wait()
 
 	return metrics, nil
 }

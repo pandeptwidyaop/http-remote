@@ -199,6 +199,7 @@ func New(cfg *config.Config, authService *services.AuthService, appService *serv
 			protected.GET("/metrics/summary", metricsHandler.GetSummary)
 			protected.GET("/metrics/history", metricsHandler.GetHistorical)
 			protected.GET("/metrics/storage", metricsHandler.GetDatabaseInfo)
+			protected.GET("/metrics/stream", metricsHandler.StreamMetrics) // SSE endpoint for real-time metrics
 			protected.POST("/metrics/prune", metricsHandler.PruneMetrics)
 			protected.POST("/metrics/vacuum", metricsHandler.VacuumDatabase)
 		}

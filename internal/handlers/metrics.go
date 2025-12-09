@@ -2,7 +2,10 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -319,4 +322,97 @@ func formatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// MetricsStreamData represents the combined metrics data sent via SSE.
+type MetricsStreamData struct {
+	System    *metrics.SystemMetrics `json:"system,omitempty"`
+	Docker    *metrics.DockerMetrics `json:"docker,omitempty"`
+	Timestamp time.Time              `json:"timestamp"`
+}
+
+// StreamMetrics streams real-time metrics using Server-Sent Events.
+// GET /api/metrics/stream?interval=5
+func (h *MetricsHandler) StreamMetrics(c *gin.Context) {
+	// Parse interval (default 5 seconds, min 1, max 60)
+	intervalStr := c.DefaultQuery("interval", "5")
+	var interval int
+	if _, err := fmt.Sscanf(intervalStr, "%d", &interval); err != nil || interval < 1 {
+		interval = 5
+	}
+	if interval > 60 {
+		interval = 60
+	}
+
+	// Set SSE headers
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+
+	// Get the request context for cancellation
+	ctx := c.Request.Context()
+
+	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+	defer ticker.Stop()
+
+	// Send initial data immediately (with context)
+	h.sendMetricsEvent(ctx, c.Writer)
+	c.Writer.Flush()
+
+	// Stream data at intervals
+	c.Stream(func(w io.Writer) bool {
+		select {
+		case <-ticker.C:
+			// Check if context is canceled before collecting metrics
+			if ctx.Err() != nil {
+				return false
+			}
+			h.sendMetricsEvent(ctx, w)
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	})
+}
+
+// sendMetricsEvent sends a single metrics event to the SSE stream.
+// Uses context to cancel metrics collection if client disconnects.
+func (h *MetricsHandler) sendMetricsEvent(ctx context.Context, w io.Writer) {
+	// Check context before starting
+	if ctx.Err() != nil {
+		return
+	}
+
+	data := MetricsStreamData{
+		Timestamp: time.Now(),
+	}
+
+	// Get system metrics with context
+	if systemMetrics, err := metrics.GetSystemMetricsWithContext(ctx); err == nil {
+		data.System = systemMetrics
+	}
+
+	// Check context again before Docker metrics
+	if ctx.Err() != nil {
+		return
+	}
+
+	// Get Docker metrics with context
+	if dockerMetrics, err := metrics.GetDockerMetricsWithContext(ctx); err == nil {
+		data.Docker = dockerMetrics
+	}
+
+	// Check context before sending
+	if ctx.Err() != nil {
+		return
+	}
+
+	// Serialize to JSON
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+
+	_, _ = fmt.Fprintf(w, "event: metrics\ndata: %s\n\n", jsonData)
 }

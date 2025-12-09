@@ -84,6 +84,7 @@ export const API_ENDPOINTS = {
   metricsSummary: '/api/metrics/summary',
   metricsHistory: '/api/metrics/history',
   metricsStorage: '/api/metrics/storage',
+  metricsStream: '/api/metrics/stream',
   metricsPrune: '/api/metrics/prune',
   metricsVacuum: '/api/metrics/vacuum',
 } as const;

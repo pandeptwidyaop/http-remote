@@ -14,6 +14,8 @@ import {
   ChevronDown,
   ChevronUp,
   BarChart3,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import {
   LineChart,
@@ -30,101 +32,7 @@ import {
 import { api } from '@/api/client';
 import { API_ENDPOINTS } from '@/lib/config';
 import Card from '@/components/ui/Card';
-
-// Types for metrics data
-interface CPUMetrics {
-  usage_percent: number;
-  cores: number;
-  model: string;
-}
-
-interface MemoryMetrics {
-  total: number;
-  used: number;
-  available: number;
-  used_percent: number;
-  swap_total: number;
-  swap_used: number;
-  swap_percent: number;
-}
-
-interface DiskMetrics {
-  device: string;
-  mountpoint: string;
-  fstype: string;
-  total: number;
-  used: number;
-  free: number;
-  used_percent: number;
-}
-
-interface NetworkMetrics {
-  interface: string;
-  bytes_sent: number;
-  bytes_recv: number;
-  packets_sent: number;
-  packets_recv: number;
-  err_in: number;
-  err_out: number;
-  is_up: boolean;
-}
-
-interface SystemMetrics {
-  cpu: CPUMetrics;
-  memory: MemoryMetrics;
-  disks: DiskMetrics[];
-  network: NetworkMetrics[];
-  uptime: number;
-  load_avg: number[];
-}
-
-interface ContainerCPU {
-  usage_percent: number;
-}
-
-interface ContainerMemory {
-  usage: number;
-  limit: number;
-  used_percent: number;
-  cache: number;
-}
-
-interface ContainerNetwork {
-  rx_bytes: number;
-  tx_bytes: number;
-  rx_packets: number;
-  tx_packets: number;
-}
-
-interface ContainerBlockIO {
-  read_bytes: number;
-  write_bytes: number;
-}
-
-interface ContainerMetrics {
-  id: string;
-  name: string;
-  image: string;
-  status: string;
-  state: string;
-  created: string;
-  cpu: ContainerCPU;
-  memory: ContainerMemory;
-  network: ContainerNetwork;
-  block_io: ContainerBlockIO;
-}
-
-interface DockerMetrics {
-  available: boolean;
-  version?: string;
-  containers: ContainerMetrics[];
-  summary: {
-    total: number;
-    running: number;
-    paused: number;
-    stopped: number;
-  };
-}
+import { useMetricsSSE } from '@/hooks/useMetricsSSE';
 
 interface HistoricalMetric {
   id: number;
@@ -596,16 +504,33 @@ function CombinedChart({
 }
 
 export default function Monitoring() {
-  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
-  const [dockerMetrics, setDockerMetrics] = useState<DockerMetrics | null>(null);
   const [historicalData, setHistoricalData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [timeRange, setTimeRange] = useState('1h');
   const [expandedContainers, setExpandedContainers] = useState<Set<string>>(new Set());
+  const [sseEnabled, setSseEnabled] = useState(true);
+
+  // Use SSE for real-time metrics
+  const {
+    connected,
+    error: sseError,
+    systemMetrics,
+    dockerMetrics,
+    lastUpdate,
+    reconnect,
+  } = useMetricsSSE({
+    interval: 5,
+    enabled: sseEnabled,
+    onData: (data) => {
+      // Auto-expand running containers on first data
+      if (data.docker?.containers && expandedContainers.size === 0) {
+        const runningIds = data.docker.containers
+          .filter((c) => c.state === 'running')
+          .map((c) => c.id);
+        setExpandedContainers(new Set(runningIds));
+      }
+    },
+  });
 
   const toggleContainerExpand = (containerId: string) => {
     setExpandedContainers((prev) => {
@@ -618,39 +543,6 @@ export default function Monitoring() {
       return next;
     });
   };
-
-  const fetchMetrics = useCallback(async () => {
-    try {
-      const [system, docker] = await Promise.all([
-        api.get<SystemMetrics>(API_ENDPOINTS.metricsSystem),
-        api.get<DockerMetrics>(API_ENDPOINTS.metricsDocker),
-      ]);
-
-      setSystemMetrics(system);
-      setDockerMetrics(docker);
-      setLastUpdate(new Date());
-      setError(null);
-
-      // Auto-expand running containers on first load
-      if (docker?.containers) {
-        setExpandedContainers((prev) => {
-          if (prev.size === 0) {
-            // First load - expand all running containers
-            const runningIds = docker.containers
-              .filter((c) => c.state === 'running')
-              .map((c) => c.id);
-            return new Set(runningIds);
-          }
-          return prev;
-        });
-      }
-    } catch (err) {
-      console.error('Failed to fetch metrics:', err);
-      setError('Failed to fetch metrics');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   const fetchHistoricalData = useCallback(async () => {
     setHistoryLoading(true);
@@ -687,34 +579,22 @@ export default function Monitoring() {
   }, [timeRange]);
 
   useEffect(() => {
-    fetchMetrics();
-
-    let interval: ReturnType<typeof setInterval> | null = null;
-    if (autoRefresh) {
-      interval = setInterval(fetchMetrics, 5000); // Refresh every 5 seconds
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [fetchMetrics, autoRefresh]);
-
-  useEffect(() => {
     fetchHistoricalData();
   }, [fetchHistoricalData]);
 
-  // Also refresh historical data periodically
+  // Also refresh historical data periodically when SSE is enabled
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!sseEnabled) return;
 
     const interval = setInterval(() => {
       fetchHistoricalData();
     }, 30000); // Refresh historical data every 30 seconds
 
     return () => clearInterval(interval);
-  }, [autoRefresh, fetchHistoricalData]);
+  }, [sseEnabled, fetchHistoricalData]);
 
-  if (loading && !systemMetrics) {
+  // Show loading only on initial load (no SSE connection yet and no data)
+  if (!connected && !systemMetrics) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -731,18 +611,32 @@ export default function Monitoring() {
           <p className="text-gray-600 mt-1">System and Docker container metrics</p>
         </div>
         <div className="flex items-center gap-4">
+          {/* SSE Connection Status */}
+          <div className="flex items-center gap-2">
+            {connected ? (
+              <span className="flex items-center gap-1.5 text-sm text-green-600">
+                <Wifi className="h-4 w-4" />
+                <span className="hidden sm:inline">Live</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-sm text-gray-500">
+                <WifiOff className="h-4 w-4" />
+                <span className="hidden sm:inline">Disconnected</span>
+              </span>
+            )}
+          </div>
           <label className="flex items-center gap-2 text-sm text-gray-600">
             <input
               type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
+              checked={sseEnabled}
+              onChange={(e) => setSseEnabled(e.target.checked)}
               className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             />
-            Auto-refresh (5s)
+            Real-time (5s)
           </label>
           <button
             onClick={() => {
-              fetchMetrics();
+              reconnect();
               fetchHistoricalData();
             }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -753,10 +647,16 @@ export default function Monitoring() {
         </div>
       </div>
 
-      {error && (
+      {sseError && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
           <AlertTriangle className="h-5 w-5 text-red-500" />
-          <span className="text-red-700">{error}</span>
+          <span className="text-red-700">{sseError}</span>
+          <button
+            onClick={reconnect}
+            className="ml-auto text-sm text-blue-600 hover:text-blue-700"
+          >
+            Retry
+          </button>
         </div>
       )}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -70,7 +71,17 @@ type ContainerBlockIO struct {
 
 // GetDockerMetrics collects metrics for all Docker containers.
 func GetDockerMetrics() (*DockerMetrics, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	return GetDockerMetricsWithContext(context.Background())
+}
+
+// GetDockerMetricsWithContext collects Docker metrics with context cancellation support.
+func GetDockerMetricsWithContext(parentCtx context.Context) (*DockerMetrics, error) {
+	// Check if already canceled
+	if parentCtx.Err() != nil {
+		return nil, parentCtx.Err()
+	}
+
+	ctx, cancel := context.WithTimeout(parentCtx, 10*time.Second)
 	defer cancel()
 
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
@@ -99,8 +110,8 @@ func GetDockerMetrics() (*DockerMetrics, error) {
 
 	metrics.Summary.Total = len(containers)
 
+	// Count summary first (fast)
 	for _, c := range containers {
-		// Update summary
 		switch c.State {
 		case "running":
 			metrics.Summary.Running++
@@ -109,8 +120,15 @@ func GetDockerMetrics() (*DockerMetrics, error) {
 		default:
 			metrics.Summary.Stopped++
 		}
+	}
 
-		containerMetric := ContainerMetrics{
+	// Collect container stats in parallel for running containers
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	containerMetrics := make([]ContainerMetrics, len(containers))
+
+	for i, c := range containers {
+		containerMetrics[i] = ContainerMetrics{
 			ID:      c.ID[:12],
 			Name:    strings.TrimPrefix(c.Names[0], "/"),
 			Image:   c.Image,
@@ -119,49 +137,62 @@ func GetDockerMetrics() (*DockerMetrics, error) {
 			Created: time.Unix(c.Created, 0),
 		}
 
-		// Only get stats for running containers
+		// Only get stats for running containers - in parallel
 		if c.State == "running" {
-			stats, err := cli.ContainerStats(ctx, c.ID, false)
-			if err == nil {
+			wg.Add(1)
+			go func(idx int, containerID string) {
+				defer wg.Done()
+
+				stats, err := cli.ContainerStats(ctx, containerID, false)
+				if err != nil {
+					return
+				}
+				defer func() { _ = stats.Body.Close() }()
+
 				var statsJSON types.StatsJSON
-				if err := json.NewDecoder(stats.Body).Decode(&statsJSON); err == nil {
-					// Calculate CPU percentage
-					containerMetric.CPU.UsagePercent = calculateCPUPercent(&statsJSON)
+				if err := json.NewDecoder(stats.Body).Decode(&statsJSON); err != nil {
+					return
+				}
 
-					// Memory
-					if statsJSON.MemoryStats.Limit > 0 {
-						containerMetric.Memory = ContainerMemory{
-							Usage:       statsJSON.MemoryStats.Usage,
-							Limit:       statsJSON.MemoryStats.Limit,
-							UsedPercent: float64(statsJSON.MemoryStats.Usage) / float64(statsJSON.MemoryStats.Limit) * 100,
-							Cache:       statsJSON.MemoryStats.Stats["cache"],
-						}
-					}
+				mu.Lock()
+				defer mu.Unlock()
 
-					// Network stats (sum all interfaces)
-					for _, netStats := range statsJSON.Networks {
-						containerMetric.Network.RxBytes += netStats.RxBytes
-						containerMetric.Network.TxBytes += netStats.TxBytes
-						containerMetric.Network.RxPackets += netStats.RxPackets
-						containerMetric.Network.TxPackets += netStats.TxPackets
-					}
+				// Calculate CPU percentage
+				containerMetrics[idx].CPU.UsagePercent = calculateCPUPercent(&statsJSON)
 
-					// Block I/O
-					for _, bio := range statsJSON.BlkioStats.IoServiceBytesRecursive {
-						switch bio.Op {
-						case "read", "Read":
-							containerMetric.BlockIO.ReadBytes += bio.Value
-						case "write", "Write":
-							containerMetric.BlockIO.WriteBytes += bio.Value
-						}
+				// Memory
+				if statsJSON.MemoryStats.Limit > 0 {
+					containerMetrics[idx].Memory = ContainerMemory{
+						Usage:       statsJSON.MemoryStats.Usage,
+						Limit:       statsJSON.MemoryStats.Limit,
+						UsedPercent: float64(statsJSON.MemoryStats.Usage) / float64(statsJSON.MemoryStats.Limit) * 100,
+						Cache:       statsJSON.MemoryStats.Stats["cache"],
 					}
 				}
-				_ = stats.Body.Close()
-			}
-		}
 
-		metrics.Containers = append(metrics.Containers, containerMetric)
+				// Network stats (sum all interfaces)
+				for _, netStats := range statsJSON.Networks {
+					containerMetrics[idx].Network.RxBytes += netStats.RxBytes
+					containerMetrics[idx].Network.TxBytes += netStats.TxBytes
+					containerMetrics[idx].Network.RxPackets += netStats.RxPackets
+					containerMetrics[idx].Network.TxPackets += netStats.TxPackets
+				}
+
+				// Block I/O
+				for _, bio := range statsJSON.BlkioStats.IoServiceBytesRecursive {
+					switch bio.Op {
+					case "read", "Read":
+						containerMetrics[idx].BlockIO.ReadBytes += bio.Value
+					case "write", "Write":
+						containerMetrics[idx].BlockIO.WriteBytes += bio.Value
+					}
+				}
+			}(i, c.ID)
+		}
 	}
+
+	wg.Wait()
+	metrics.Containers = containerMetrics
 
 	return metrics, nil
 }
