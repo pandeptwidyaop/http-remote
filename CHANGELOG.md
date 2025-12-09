@@ -1,3 +1,10 @@
+## [2.8.2](https://github.com/pandeptwidyaop/http-remote/compare/v2.8.1...v2.8.2) (2025-12-09)
+
+
+### Bug Fixes
+
+* improve upgrade and restart reliability ([0ea1eab](https://github.com/pandeptwidyaop/http-remote/commit/0ea1eabd7e26237b553fb1c9c633bccddcf1e721))
+
 ## [2.8.1](https://github.com/pandeptwidyaop/http-remote/compare/v2.8.0...v2.8.1) (2025-12-09)
 
 
