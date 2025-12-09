@@ -1,3 +1,11 @@
+# [2.8.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.7.1...v2.8.0) (2025-12-09)
+
+
+### Features
+
+* add sidebar navigation and container history charts ([7950ad7](https://github.com/pandeptwidyaop/http-remote/commit/7950ad7e6b85aa91b0193f8cfce9747a10c197d9))
+* add system monitoring with historical metrics and charts ([88d2ecd](https://github.com/pandeptwidyaop/http-remote/commit/88d2ecdcc4b307f2bcc1b5f44b914ccee044db78))
+
 ## [2.7.1](https://github.com/pandeptwidyaop/http-remote/compare/v2.7.0...v2.7.1) (2025-12-08)
 
 
