@@ -1,3 +1,10 @@
+## [2.8.1](https://github.com/pandeptwidyaop/http-remote/compare/v2.8.0...v2.8.1) (2025-12-09)
+
+
+### Bug Fixes
+
+* resolve lint errors (errcheck, gofmt, unparam) ([2d0310a](https://github.com/pandeptwidyaop/http-remote/commit/2d0310a31233e271e9c85d9adc2a095faf113f6b))
+
 # [2.8.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.7.1...v2.8.0) (2025-12-09)
 
 
