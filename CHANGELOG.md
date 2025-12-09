@@ -1,3 +1,10 @@
+# [2.10.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.9.2...v2.10.0) (2025-12-09)
+
+
+### Features
+
+* add container management page with Docker integration ([93ed98f](https://github.com/pandeptwidyaop/http-remote/commit/93ed98f8eec037f9150dd2b7507e42263acd0626))
+
 ## [2.9.2](https://github.com/pandeptwidyaop/http-remote/compare/v2.9.1...v2.9.2) (2025-12-09)
 
 
