@@ -66,10 +66,10 @@ type StoredDockerMetrics struct {
 
 // DatabaseInfo provides information about the database storage.
 type DatabaseInfo struct {
-	Path            string `json:"path"`
-	SizeBytes       int64  `json:"size_bytes"`
-	SizeFormatted   string `json:"size_formatted"`
-	MetricsCount    int64  `json:"metrics_count"`
+	Path            string     `json:"path"`
+	SizeBytes       int64      `json:"size_bytes"`
+	SizeFormatted   string     `json:"size_formatted"`
+	MetricsCount    int64      `json:"metrics_count"`
 	OldestTimestamp *time.Time `json:"oldest_timestamp,omitempty"`
 	NewestTimestamp *time.Time `json:"newest_timestamp,omitempty"`
 }
@@ -629,22 +629,22 @@ func (c *MetricsCollector) GetDatabaseInfo(dbPath string) (*DatabaseInfo, error)
 
 	// Get metrics count
 	var systemCount, dockerCount, hourlyCount, dailyCount int64
-	c.db.QueryRow("SELECT COUNT(*) FROM system_metrics").Scan(&systemCount)
-	c.db.QueryRow("SELECT COUNT(*) FROM docker_metrics").Scan(&dockerCount)
-	c.db.QueryRow("SELECT COUNT(*) FROM system_metrics_hourly").Scan(&hourlyCount)
-	c.db.QueryRow("SELECT COUNT(*) FROM system_metrics_daily").Scan(&dailyCount)
+	_ = c.db.QueryRow("SELECT COUNT(*) FROM system_metrics").Scan(&systemCount)
+	_ = c.db.QueryRow("SELECT COUNT(*) FROM docker_metrics").Scan(&dockerCount)
+	_ = c.db.QueryRow("SELECT COUNT(*) FROM system_metrics_hourly").Scan(&hourlyCount)
+	_ = c.db.QueryRow("SELECT COUNT(*) FROM system_metrics_daily").Scan(&dailyCount)
 	info.MetricsCount = systemCount + dockerCount + hourlyCount + dailyCount
 
 	// Get oldest and newest timestamps
 	// Use string scanning and manual parsing to handle SQLite timestamp format
 	var oldestStr, newestStr sql.NullString
-	c.db.QueryRow("SELECT MIN(timestamp) FROM system_metrics").Scan(&oldestStr)
+	_ = c.db.QueryRow("SELECT MIN(timestamp) FROM system_metrics").Scan(&oldestStr)
 	if oldestStr.Valid && oldestStr.String != "" {
 		if t, err := ParseSQLiteTimestamp(oldestStr.String); err == nil {
 			info.OldestTimestamp = &t
 		}
 	}
-	c.db.QueryRow("SELECT MAX(timestamp) FROM system_metrics").Scan(&newestStr)
+	_ = c.db.QueryRow("SELECT MAX(timestamp) FROM system_metrics").Scan(&newestStr)
 	if newestStr.Valid && newestStr.String != "" {
 		if t, err := ParseSQLiteTimestamp(newestStr.String); err == nil {
 			info.NewestTimestamp = &t

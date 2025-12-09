@@ -300,9 +300,9 @@ func (h *MetricsHandler) VacuumDatabase(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":        true,
-		"size_before":    sizeBefore,
-		"size_after":     sizeAfter,
+		"success":         true,
+		"size_before":     sizeBefore,
+		"size_after":      sizeAfter,
 		"space_reclaimed": sizeBefore - sizeAfter,
 	})
 }

@@ -107,11 +107,11 @@ type AdminConfig struct {
 
 // MetricsConfig holds metrics collection and retention configuration.
 type MetricsConfig struct {
-	Enabled           *bool  `yaml:"enabled"`            // Enable metrics collection (default: true)
-	CollectionInterval string `yaml:"collection_interval"` // How often to collect metrics (default: 1m)
-	RetentionDays     int    `yaml:"retention_days"`     // How long to keep raw metrics (default: 7)
-	HourlyRetentionDays int  `yaml:"hourly_retention_days"` // How long to keep hourly aggregates (default: 30)
-	DailyRetentionDays int   `yaml:"daily_retention_days"`  // How long to keep daily aggregates (default: 365)
+	Enabled             *bool  `yaml:"enabled"`               // Enable metrics collection (default: true)
+	CollectionInterval  string `yaml:"collection_interval"`   // How often to collect metrics (default: 1m)
+	RetentionDays       int    `yaml:"retention_days"`        // How long to keep raw metrics (default: 7)
+	HourlyRetentionDays int    `yaml:"hourly_retention_days"` // How long to keep hourly aggregates (default: 30)
+	DailyRetentionDays  int    `yaml:"daily_retention_days"`  // How long to keep daily aggregates (default: 365)
 }
 
 // IsEnabled returns whether metrics collection is enabled (defaults to true).

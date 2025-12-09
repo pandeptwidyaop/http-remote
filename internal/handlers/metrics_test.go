@@ -19,7 +19,7 @@ import (
 	"github.com/pandeptwidyaop/http-remote/internal/services"
 )
 
-func setupMetricsHandlerTest(t *testing.T) (*services.MetricsCollector, *gin.Engine, func()) {
+func setupMetricsHandlerTest(t *testing.T) (*gin.Engine, func()) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
@@ -96,11 +96,11 @@ func setupMetricsHandlerTest(t *testing.T) (*services.MetricsCollector, *gin.Eng
 		os.RemoveAll(tempDir)
 	}
 
-	return collector, router, cleanup
+	return router, cleanup
 }
 
 func TestMetricsHandler_GetSystem(t *testing.T) {
-	_, router, cleanup := setupMetricsHandlerTest(t)
+	router, cleanup := setupMetricsHandlerTest(t)
 	defer cleanup()
 
 	w := httptest.NewRecorder()
@@ -132,7 +132,7 @@ func TestMetricsHandler_GetSystem(t *testing.T) {
 }
 
 func TestMetricsHandler_GetDocker(t *testing.T) {
-	_, router, cleanup := setupMetricsHandlerTest(t)
+	router, cleanup := setupMetricsHandlerTest(t)
 	defer cleanup()
 
 	w := httptest.NewRecorder()
@@ -158,7 +158,7 @@ func TestMetricsHandler_GetDocker(t *testing.T) {
 }
 
 func TestMetricsHandler_GetSummary(t *testing.T) {
-	_, router, cleanup := setupMetricsHandlerTest(t)
+	router, cleanup := setupMetricsHandlerTest(t)
 	defer cleanup()
 
 	w := httptest.NewRecorder()
@@ -194,7 +194,7 @@ func TestMetricsHandler_GetSummary(t *testing.T) {
 }
 
 func TestMetricsHandler_GetHistorical(t *testing.T) {
-	_, router, cleanup := setupMetricsHandlerTest(t)
+	router, cleanup := setupMetricsHandlerTest(t)
 	defer cleanup()
 
 	t.Run("default parameters", func(t *testing.T) {
@@ -278,7 +278,7 @@ func TestMetricsHandler_GetHistorical(t *testing.T) {
 }
 
 func TestMetricsHandler_GetContainer(t *testing.T) {
-	_, router, cleanup := setupMetricsHandlerTest(t)
+	router, cleanup := setupMetricsHandlerTest(t)
 	defer cleanup()
 
 	// Test with a non-existent container ID
@@ -295,7 +295,7 @@ func TestMetricsHandler_GetContainer(t *testing.T) {
 }
 
 func TestMetricsHandler_GetContainerHistory(t *testing.T) {
-	_, router, cleanup := setupMetricsHandlerTest(t)
+	router, cleanup := setupMetricsHandlerTest(t)
 	defer cleanup()
 
 	t.Run("valid container ID", func(t *testing.T) {
@@ -347,7 +347,7 @@ func TestMetricsHandler_GetContainerHistory(t *testing.T) {
 }
 
 func TestMetricsHandler_GetDatabaseInfo(t *testing.T) {
-	_, router, cleanup := setupMetricsHandlerTest(t)
+	router, cleanup := setupMetricsHandlerTest(t)
 	defer cleanup()
 
 	w := httptest.NewRecorder()
@@ -379,7 +379,7 @@ func TestMetricsHandler_GetDatabaseInfo(t *testing.T) {
 }
 
 func TestMetricsHandler_PruneMetrics(t *testing.T) {
-	_, router, cleanup := setupMetricsHandlerTest(t)
+	router, cleanup := setupMetricsHandlerTest(t)
 	defer cleanup()
 
 	t.Run("valid prune request", func(t *testing.T) {
@@ -433,7 +433,7 @@ func TestMetricsHandler_PruneMetrics(t *testing.T) {
 }
 
 func TestMetricsHandler_VacuumDatabase(t *testing.T) {
-	_, router, cleanup := setupMetricsHandlerTest(t)
+	router, cleanup := setupMetricsHandlerTest(t)
 	defer cleanup()
 
 	w := httptest.NewRecorder()
