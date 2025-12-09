@@ -1,3 +1,10 @@
+# [2.9.0](https://github.com/pandeptwidyaop/http-remote/compare/v2.8.2...v2.9.0) (2025-12-09)
+
+
+### Features
+
+* implement SSE for real-time metrics with parallel collection ([a99a10e](https://github.com/pandeptwidyaop/http-remote/commit/a99a10e8cc865d90af596bd37e4819e16429aa0d))
+
 ## [2.8.2](https://github.com/pandeptwidyaop/http-remote/compare/v2.8.1...v2.8.2) (2025-12-09)
 
 
