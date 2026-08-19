@@ -841,15 +841,23 @@ StandardError=journal
 # Environment
 Environment=GIN_MODE=release
 
-# Security hardening (optional)
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
+# Security hardening
+# PENTING: pengaturan ini juga membatasi SEMUA command yang dieksekusi
+# lewat HTTP Remote, bukan cuma proses server-nya.
+# Baca "Security Hardening & ProtectSystem" di bawah sebelum mengubah.
+NoNewPrivileges=false
+ProtectSystem=full
+ProtectHome=false
 ReadWritePaths=/var/lib/http-remote
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+> **Kenapa `full` dan bukan `strict`?** Dengan `strict`, seluruh filesystem
+> menjadi read-only bagi service — termasuk untuk setiap command deployment
+> yang dijalankan lewat tool ini. Lihat tabel di bawah untuk memilih level
+> yang sesuai kebutuhan.
 
 ### 4. Enable dan Start Service
 
@@ -912,7 +920,73 @@ sudo systemctl restart http-remote
 
 > **Note**: Jika menggunakan user non-root, pastikan user tersebut memiliki akses ke working directory aplikasi yang akan di-deploy.
 
-### 7. Logrotate (Optional)
+### 7. Security Hardening & ProtectSystem
+
+Directive `Protect*` di systemd berlaku untuk **seluruh mount namespace** service —
+artinya setiap command yang dieksekusi lewat HTTP Remote ikut terkena, bukan hanya
+proses server-nya. Ini sering tidak disadari dan gejalanya menyesatkan.
+
+| Level | Yang read-only | Cocok untuk |
+|---|---|---|
+| `strict` | Seluruh filesystem | Server yang tidak menjalankan command apa pun di luar `ReadWritePaths` |
+| `full` | `/usr`, `/boot`, `/etc` | **Rekomendasi.** Deployment normal: tulis ke `/var`, `/tmp`, `/home`, `/srv` |
+| `yes` | `/usr`, `/boot` | Perlu mengubah config di `/etc` |
+| `no` | — | Perlu `apt install`, atau administrasi sistem penuh |
+
+Directive terkait:
+
+- `ProtectHome=true` membuat `/home` dan `/root` tidak bisa diakses. Set `false`
+  kalau aplikasi yang di-deploy berada di `/home`.
+- `ReadWritePaths=` menembus pembatasan di atas untuk path tertentu. Bisa diisi
+  beberapa path, dipisah spasi.
+- `NoNewPrivileges=true` membuat `sudo` di dalam command **selalu gagal**. Set
+  `false` kalau command deployment butuh sudo.
+
+Contoh untuk aplikasi yang di-deploy di `/home/devops/myapp` dan butuh sudo:
+
+```ini
+NoNewPrivileges=false
+ProtectSystem=full
+ProtectHome=false
+ReadWritePaths=/var/lib/http-remote /home/devops/myapp
+```
+
+#### Troubleshooting: "Read-only file system"
+
+Kalau command lewat HTTP Remote gagal dengan pesan seperti:
+
+```
+sudo: unable to mkdir /run/sudo/ts: Read-only file system
+E: Could not open file /var/lib/apt/lists/... - open (30: Read-only file system)
+```
+
+**Ini hampir pasti bukan kerusakan disk.** Sebelum menjalankan `fsck` atau reboot,
+pastikan dulu penyebabnya:
+
+```bash
+# 1. Apakah kernel melaporkan error disk? Kalau bersih, disk baik-baik saja.
+sudo dmesg -T | grep -iE 'ext4|I/O error|remount'
+
+# 2. Apakah tmpfs ikut read-only? Disk rusak TIDAK bisa menyebabkan ini,
+#    karena tmpfs berada di RAM. Kalau ya, penyebabnya mount namespace.
+mount | grep -E ' /run | / '
+
+# 3. Lihat nilai efektif yang sedang berlaku
+systemctl show http-remote -p ProtectSystem -p ProtectHome -p ReadWritePaths
+```
+
+Ciri khas pembatasan systemd: `/` dan `/run` read-only, tetapi path di
+`ReadWritePaths` tetap bisa ditulis dan muncul sebagai mount tersendiri di
+`/proc/mounts`.
+
+Perbaikannya cukup menurunkan level `ProtectSystem` sesuai tabel di atas, lalu:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart http-remote
+```
+
+### 8. Logrotate (Optional)
 
 Jika ingin rotasi log manual, buat `/etc/logrotate.d/http-remote`:
 
